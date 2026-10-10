@@ -11,11 +11,11 @@ if (process.argv.length === 3 && process.argv[2] === '--help') { console.log(usa
 if (process.argv.length > 4 || process.argv.slice(2).some(arg => arg.startsWith('-'))) throw new Error(usage);
 
 const root = resolve(import.meta.dirname, '../..');
-const zig = realpathSync(process.env.AGENT_ZIG_EXE ?? execFileSync('which', ['zig'], {encoding: 'utf8'}).trim());
+const zig = realpathSync(process.env.PROTEAN_ZIG_EXE ?? execFileSync('which', ['zig'], {encoding: 'utf8'}).trim());
 const description = execFileSync(zig, ['env'], {encoding: 'utf8'});
 const library = realpathSync(JSON.parse(description.match(/^\s*\.lib_dir = (".*"),$/m)?.[1] ?? 'null'));
 assert.equal(execFileSync(zig, ['version'], {encoding: 'utf8'}).trim(), '0.17.0');
-const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'Agent downstream ü ')));
+const scratch = realpathSync(mkdtempSync(join(tmpdir(), 'Protean downstream ü ')));
 const cache = resolve(process.env.ZIG_GLOBAL_CACHE_DIR ?? join(scratch, 'global-cache'));
 const local = join(scratch, 'local-cache'), inputs = join(scratch, 'inputs');
 mkdirSync(cache, {recursive: true}); mkdirSync(local); mkdirSync(inputs);
@@ -57,13 +57,13 @@ try {
   // An absolute interpreter path also fails, not only PATH lookup.
   run(process.execPath, ['--version'], scratch, {failure: true});
   if (existsSync('/usr/bin/python3')) run('/usr/bin/python3', ['--version'], scratch, {failure: true});
-  const sourceLock = join(root, 'conformance/agent4/dependencies.lock.json');
-  const nativeLock = join(root, 'conformance/agent4/native-dependencies.lock.json');
+  const sourceLock = join(root, 'conformance/protean/dependencies.lock.json');
+  const nativeLock = join(root, 'conformance/protean/native-dependencies.lock.json');
   const lock = JSON.parse(readFileSync(sourceLock)), sqlite = JSON.parse(readFileSync(nativeLock)).sqlite;
   // Cached transport bytes are optional and remain untrusted until native setup
   // authenticates them. No source or pre-generated manifest is copied.
-  const seed = resolve(process.argv[2] ?? join(root, '.agent4-native/inputs'));
-  for (const name of [`boundary-${lock.boundary.commit}.tar.gz`, `world-${lock.world.commit}.tar.gz`, `${sqlite.archive.root}.zip`])
+  const seed = resolve(process.argv[2] ?? join(root, '.protean-native/inputs'));
+  for (const name of [`horos-${lock.boundary.commit}.tar.gz`, `kronos-${lock.world.commit}.tar.gz`, `${sqlite.archive.root}.zip`])
     if (existsSync(join(seed, name))) copyFileSync(join(seed, name), join(inputs, name));
   const started = performance.now();
   run(zig, ['run', join(root, 'tools/native/dependencies.zig'), '--', 'setup', sourceLock, nativeLock, inputs, zig]);
@@ -76,7 +76,7 @@ try {
     const target = join(exportRoot, file); mkdirSync(dirname(target), {recursive: true}); copyFileSync(join(root, file), target);
   }
   const packageHash = run(zig, ['fetch', exportRoot]);
-  assert.match(packageHash, /^agent-4\.0\.0-dev\.0-[A-Za-z0-9_-]+$/);
+  assert.match(packageHash, /^protean-4\.0\.0-dev\.0-[A-Za-z0-9_-]+$/);
   const packageDir = join(scratch, 'package'); mkdirSync(packageDir);
   run('/usr/bin/tar', ['-xzf', join(cache, 'p', `${packageHash}.tar.gz`), '-C', packageDir]);
   const source = join(packageDir, packageHash);
@@ -88,18 +88,18 @@ try {
   const zon = readFileSync(join(root, 'test/consumers/adaptive/build.zig.zon'), 'utf8').replace('.path = "../../.."', `.path = "../package/${packageHash}"`);
   writeFileSync(join(consumer, 'build.zig.zon'), zon);
   const prefixDir = join(scratch, 'installed');
-  const buildArgs = ['build', '-Doptimize=safe', `-Dworld-source=${join(inputs, 'world')}`, `-Dsqlite-source=${join(inputs, 'sqlite')}`, '--prefix', prefixDir, '--prefix-exe-dir', 'executables', '--summary', 'all'];
+  const buildArgs = ['build', '-Doptimize=safe', `-Dkronos-source=${join(inputs, 'kronos')}`, `-Dsqlite-source=${join(inputs, 'sqlite')}`, '--prefix', prefixDir, '--prefix-exe-dir', 'executables', '--summary', 'all'];
   run(zig, buildArgs, consumer);
   // The actual exported module graph must stop on either a changed package or
   // a changed native source override, before compiling/claiming new assets.
-  for (const path of [join(consumer, 'zig-pkg', lock.boundary.package.zigHash, 'src/root.zig'), join(inputs, 'world/src/root.zig')]) {
+  for (const path of [join(consumer, 'zig-pkg', lock.boundary.package.zigHash, 'src/root.zig'), join(inputs, 'kronos/src/root.zig')]) {
     const original = readFileSync(path);
     try {
       writeFileSync(path, Buffer.concat([original, Buffer.from('\n// changed after admission\n')]));
       run(zig, buildArgs, consumer, {failure: true, diagnostic: 'IdentityMismatch'});
     } finally { writeFileSync(path, original); }
   }
-  const executable = join(prefixDir, 'executables/adaptive-agent');
+  const executable = join(prefixDir, 'executables/protean');
   const manifest = JSON.parse(run(executable, ['describe-build']));
   assert.equal(manifest.application_id, 'adaptive-agent');
   assert.equal(manifest.dependencies.world, lock.world.commit);

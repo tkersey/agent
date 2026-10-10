@@ -1,27 +1,27 @@
 const std = @import("std");
-const boundary = @import("boundary");
-const agent = @import("agent");
-const world = @import("world");
-const controls = agent.adaptive_controls;
-const contracts = agent.contracts;
-const model = agent.model_invocation;
+const horos = @import("horos");
+const protean = @import("protean");
+const kronos = @import("kronos");
+const controls = protean.adaptive_controls;
+const contracts = protean.contracts;
+const model = protean.model_invocation;
 
 test "authored inference control proposes independent effort and model changes without changing skill authority" {
     const allocator = std.testing.allocator;
-    var b = boundary.source.Builder.init(allocator);
+    var b = horos.source.Builder.init(allocator);
     defer b.deinit();
-    var registry = agent.admission.Registry.init(b.allocator());
+    var registry = protean.admission.Registry.init(b.allocator());
     defer registry.deinit();
-    const c: agent.Context = .{ .builder = &b, .registry = &registry };
+    const c: protean.Context = .{ .builder = &b, .registry = &registry };
     const entry = try controls.defineInference(c, try b.constant(void, {}));
     try std.testing.expectEqual(entry, try controls.defineInference(c, try b.constant(void, {})));
     const module = b.module(entry, try b.scalar(void));
-    try agent.admission.verify(allocator, module, &registry);
-    var compiled = try boundary.program.compile(allocator, module);
+    try protean.admission.verify(allocator, module, &registry);
+    var compiled = try horos.program.compile(allocator, module);
     defer compiled.deinit();
-    const image = try allocator.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
+    const image = try allocator.alloc(u8, try horos.data.program_image.encodedLength(compiled.program));
     defer allocator.free(image);
-    _ = try boundary.data.program_image.encode(allocator, compiled.program, image);
+    _ = try horos.data.program_image.encode(allocator, compiled.program, image);
     const profile: model.AdaptiveInferenceProfile = .{
         .id = .{ .bytes = "analysis" },
         .model = .{ .bytes = "fixture-model-a" },
@@ -78,7 +78,7 @@ test "authored inference control proposes independent effort and model changes w
         }
         const args = try contracts.encodeOwned(controls.InferenceInput, allocator, input);
         defer allocator.free(args);
-        var output = try world.invocation.invoke(allocator, .{ .image = image, .instance = .{ .initial_args = args } });
+        var output = try kronos.invocation.invoke(allocator, .{ .image = image, .instance = .{ .initial_args = args } });
         defer output.deinit();
         try std.testing.expect(output.record == .completed);
         var decoded = try contracts.decodeOwned(controls.Proposal, allocator, output.record.completed);
@@ -126,19 +126,19 @@ test "authored skill control preserves state on rejection and fences actual evic
     }, .{ .model_id_bytes = 128, .temperature_bytes = 32, .maximum_messages = 4, .message_bytes = 1024, .maximum_output_items = 8, .call_id_bytes = 64, .arguments_json_bytes = 4096, .result_text_bytes = 4096, .provider_response_bytes = 4096 });
     const Input = controls.SkillInput(P);
     const allocator = std.testing.allocator;
-    var b = boundary.source.Builder.init(allocator);
+    var b = horos.source.Builder.init(allocator);
     defer b.deinit();
-    var registry = agent.admission.Registry.init(b.allocator());
+    var registry = protean.admission.Registry.init(b.allocator());
     defer registry.deinit();
-    const c: agent.Context = .{ .builder = &b, .registry = &registry };
+    const c: protean.Context = .{ .builder = &b, .registry = &registry };
     const entry = try controls.defineSkill(P, c, try b.constant(void, {}));
     const module = b.module(entry, try b.scalar(void));
-    try agent.admission.verify(allocator, module, &registry);
-    var compiled = try boundary.program.compile(allocator, module);
+    try protean.admission.verify(allocator, module, &registry);
+    var compiled = try horos.program.compile(allocator, module);
     defer compiled.deinit();
-    const image = try allocator.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
+    const image = try allocator.alloc(u8, try horos.data.program_image.encodedLength(compiled.program));
     defer allocator.free(image);
-    _ = try boundary.data.program_image.encode(allocator, compiled.program, image);
+    _ = try horos.data.program_image.encode(allocator, compiled.program, image);
     const state: controls.State = .{
         .selection = .{ .profile_id = .{ .bytes = "analysis" }, .profile_digest = @splat(2), .effective_effort = .high, .control_revision = 5 },
         .top_effort = .medium,
@@ -189,7 +189,7 @@ test "authored skill control preserves state on rejection and fences actual evic
         }
         const args = try contracts.encodeOwned(Input, allocator, input);
         defer allocator.free(args);
-        var output = try world.invocation.invoke(allocator, .{ .image = image, .instance = .{ .initial_args = args } });
+        var output = try kronos.invocation.invoke(allocator, .{ .image = image, .instance = .{ .initial_args = args } });
         defer output.deinit();
         try std.testing.expect(output.record == .completed);
         var decoded = try contracts.decodeOwned(controls.Proposal, allocator, output.record.completed);

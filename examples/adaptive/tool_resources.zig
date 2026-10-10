@@ -1,8 +1,8 @@
 //! Frozen value admission and the actual component interface view.
 const std = @import("std");
-const native = @import("agent_native");
-const data = @import("boundary_data");
-const contracts = @import("agent_contracts");
+const native = @import("protean_native");
+const data = @import("horos_data");
+const contracts = @import("protean_contracts");
 const t = @import("application_types");
 const wire = contracts.tool_construction;
 

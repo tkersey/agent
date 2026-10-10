@@ -1,10 +1,10 @@
 //! Compiled participants over suspended task-valued hyperfunction endpoints.
 const std = @import("std");
-const agent = @import("agent");
-const boundary = @import("boundary");
-const source = boundary.source;
-const hyper = boundary.library.hyper;
-const data = boundary.data;
+const protean = @import("protean");
+const horos = @import("horos");
+const source = horos.source;
+const hyper = horos.library.hyper;
+const data = horos.data;
 const fixture = @import("participant.zig");
 const P = fixture.P;
 const Input = fixture.Input;
@@ -24,8 +24,8 @@ const Types = struct {
 fn types(b: *source.Builder) !Types {
     const cache = try b.specialization(Types, "fixture.recursive-participant/v1", .{});
     if (cache.cached) |value| return value;
-    const input = try agent.contracts.schema(Input, b);
-    const state = try agent.contracts.schema(State, b);
+    const input = try protean.contracts.schema(Input, b);
+    const state = try protean.contracts.schema(State, b);
     const integer = try b.scalar(u64);
     const model = try P.declare(b);
     const read = try b.effect(.{ .identity = "fixture.recursive.reference-bytes", .payload = integer, .result = integer });
@@ -144,9 +144,9 @@ fn objectChecked(allocator: std.mem.Allocator, consumer: bool, false_capture: bo
     return bytes;
 }
 
-fn defineSample(c: agent.Context, t: Types) !void {
+fn defineSample(c: protean.Context, t: Types) !void {
     const b = c.builder;
-    const interpreted = try agent.responders.defineModel(P, c, try b.constant(void, {}), false);
+    const interpreted = try protean.responders.defineModel(P, c, try b.constant(void, {}), false);
     const result = try b.variable(try c.schema(P.Interpretation));
     const accepted = try b.variable(try c.schema(P.AnswerType));
     const rejected = try b.variable(try c.schema(P.InterpretationFailure));
@@ -170,7 +170,7 @@ const Application = struct {
     var omit_reference = false;
     var assessment = false;
     var completion = false;
-    pub fn emit(c: agent.Context) !source.Module {
+    pub fn emit(c: protean.Context) !source.Module {
         const b = c.builder;
         const t = try types(b);
         try c.registry.classify(t.model, .model);
@@ -204,8 +204,8 @@ const Application = struct {
         return b.module(entry, try b.scalar(void));
     }
 };
-fn install(c: agent.Context, t: Types, name: []const u8, bytes: []const u8, result: Id) !Id {
-    return agent.participant.declare(c, .{
+fn install(c: protean.Context, t: Types, name: []const u8, bytes: []const u8, result: Id) !Id {
+    return protean.participant.declare(c, .{
         .instance = name,
         .object = bytes,
         .entry = "create",
@@ -215,18 +215,18 @@ fn install(c: agent.Context, t: Types, name: []const u8, bytes: []const u8, resu
         .functions = &.{.{ .symbol = "sample", .function = t.sample }},
     });
 }
-const System = agent.system(.{
+const System = protean.system(.{
     .InitialArgs = Input,
     .Result = u64,
     .Failure = void,
     .application = Application,
 });
 
-fn discardIdle(b: *source.Builder, g: boundary.library.generator.Generator, value: Id) !Id {
+fn discardIdle(b: *source.Builder, g: horos.library.generator.Generator, value: Id) !Id {
     const payload = try b.variable(g.element);
     const package = try b.variable(g.package);
     const failure = try b.term(.{ .fail = try b.constant(void, {}) });
-    const disposed = try boundary.library.generator.close(b, g, try b.reference(package));
+    const disposed = try horos.library.generator.close(b, g, try b.reference(package));
     const done = try b.bind(try b.variable(try b.scalar(void)), disposed, failure);
     return b.term(.{ .unpack_product = .{ .value = value, .variables = &.{ payload, package }, .body = done } });
 }
@@ -235,7 +235,7 @@ fn discardIdle(b: *source.Builder, g: boundary.library.generator.Generator, valu
 /// independently live while the reciprocal task and model responder are parked.
 fn withIdle(b: *source.Builder, t: Types, work: Id) !Id {
     const unit = try b.scalar(void);
-    const g = try boundary.library.generator.defineExchange(b, "fixture.recursive.idle", unit, t.integer, unit, &.{ unit, t.integer }, &.{}, &.{}, .{ .effects = &.{t.read} });
+    const g = try horos.library.generator.defineExchange(b, "fixture.recursive.idle", unit, t.integer, unit, &.{ unit, t.integer }, &.{}, &.{}, .{ .effects = &.{t.read} });
     const body = try b.declare(&.{g.capability}, unit, &.{ t.read, g.effect }, &.{});
     const offered = try b.term(.{ .perform = .{ .effect = g.effect, .capability = try b.reference(b.parameter(body, 0)), .payload = try b.constant(u64, 7) } });
     const observed = try b.term(.{ .perform = .{ .effect = t.read, .payload = try b.constant(u64, 1) } });
@@ -257,7 +257,7 @@ fn withIdle(b: *source.Builder, t: Types, work: Id) !Id {
         .{ .variable = try b.variable(unit), .body = try b.pure(try b.reference(result)) },
         .{ .variable = unexpected, .body = try discardIdle(b, g, try b.reference(unexpected)) },
     } } });
-    const resumed = try b.bind(next, try boundary.library.generator.next(b, g, try b.reference(package)), finish);
+    const resumed = try b.bind(next, try horos.library.generator.next(b, g, try b.reference(package)), finish);
     const execute = try b.bind(result, work, resumed);
     const unpack = try b.term(.{ .unpack_product = .{ .value = try b.reference(yielded), .variables = &.{ payload, package }, .body = execute } });
     const dispatch = try b.term(.{ .match_sum = .{ .value = try b.reference(answer), .cases = &.{
@@ -270,7 +270,7 @@ fn withIdle(b: *source.Builder, t: Types, work: Id) !Id {
     } }), dispatch);
 }
 
-fn completionHelper(c: agent.Context, t: Types) !Id {
+fn completionHelper(c: protean.Context, t: Types) !Id {
     const b = c.builder;
     const write = try c.external("fixture.recursive.target-write", t.input, t.integer, .write);
     const function = try b.declare(&.{t.input}, t.integer, &.{write}, &.{});
@@ -296,7 +296,7 @@ test "recursive participant normal admission rejects missing reference binding" 
     Application.consumer_bytes = c;
     Application.omit_reference = true;
     defer Application.omit_reference = false;
-    try std.testing.expectError(error.InvalidParticipant, agent.compile(allocator, System));
+    try std.testing.expectError(error.InvalidParticipant, protean.compile(allocator, System));
 }
 
 test "recursive participant assessment examines imported completion authority" {
@@ -309,9 +309,9 @@ test "recursive participant assessment examines imported completion authority" {
     Application.consumer_bytes = c;
     Application.assessment = true;
     defer Application.assessment = false;
-    var permitted = try agent.compile(allocator, System);
+    var permitted = try protean.compile(allocator, System);
     defer permitted.deinit();
     Application.completion = true;
     defer Application.completion = false;
-    try std.testing.expectError(error.SpeculativeEffect, agent.compile(allocator, System));
+    try std.testing.expectError(error.SpeculativeEffect, protean.compile(allocator, System));
 }

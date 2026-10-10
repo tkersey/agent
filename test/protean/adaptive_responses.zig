@@ -1,8 +1,8 @@
 const std = @import("std");
-const agent = @import("agent");
-const native = @import("agent_native");
-const contracts = agent.contracts;
-const model = agent.model_invocation;
+const protean = @import("protean");
+const native = @import("protean_native");
+const contracts = protean.contracts;
+const model = protean.model_invocation;
 const P = model.Profile(union(enum) { finish: struct { value: u64 }, inspect: struct { value: u64 } }, .{
     .{ .name = "finish", .description = "Finish with evidence." },
     .{ .name = "inspect", .description = "Inspect an invariant." },
@@ -115,7 +115,7 @@ test "adaptive projection preserves history and owns skill and opaque eviction" 
     const ctx: native.registry.ProjectionContext = .{ .allocator = a, .task = @splat(7), .tenant = "fixture", .profile = profile_bytes, .objects = .{ .owner = &objects, .read = Objects.read } };
     var handlers = try native.Registry.init(a, &.{Adapter.declaration()});
     defer handlers.deinit();
-    const Model = agent.model(.{ .name = "adaptive-fixture", .model = "fixture-model-a", .parameters = .{ .max_output_tokens = @as(u32, 4096), .reasoning = .{ .effort = .medium } }, .protocol = struct {
+    const Model = protean.model(.{ .name = "adaptive-fixture", .model = "fixture-model-a", .parameters = .{ .max_output_tokens = @as(u32, 4096), .reasoning = .{ .effort = .medium } }, .protocol = struct {
         pub const semantic_identity = model.protocol_identity;
     } });
     var invocation = try P.templateValue(Model, .{ .items = &.{

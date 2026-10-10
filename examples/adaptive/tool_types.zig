@@ -1,5 +1,5 @@
 //! Small relational values; all analysis is performed by composed BPI3 code.
-const c = @import("agent_contracts");
+const c = @import("protean_contracts");
 pub const Row = struct {
     id: u64,
     key: u64,

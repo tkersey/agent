@@ -1,8 +1,8 @@
 //! Native bindings for the single authored adaptive application.
 const std = @import("std");
-const native = @import("agent_native");
+const native = @import("protean_native");
 const t = @import("application_types");
-const contracts = @import("agent_contracts");
+const contracts = @import("protean_contracts");
 const context = @import("context.zig");
 const work = @import("work.zig");
 const tool_work = @import("tool_work.zig");

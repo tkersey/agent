@@ -1,10 +1,10 @@
 //! Build-time compiled relational components. Runtime only receives their BMO1.
 const std = @import("std");
-const boundary = @import("boundary");
-const c = @import("agent_contracts");
+const horos = @import("horos");
+const c = @import("protean_contracts");
 const t = @import("application_types").tool_types;
-const source = boundary.source;
-const data = boundary.data;
+const source = horos.source;
+const data = horos.data;
 const Id = source.Id;
 pub const kinds = [_]Kind{ .compose, .map, .filter, .selected, .join, .classify, .orphan, .swap, .group };
 pub const Kind = enum { compose, map, filter, selected, join, classify, orphan, swap, group };

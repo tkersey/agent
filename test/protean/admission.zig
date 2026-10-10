@@ -1,5 +1,5 @@
 const std = @import("std");
-const bnd = @import("boundary");
+const bnd = @import("horos");
 const admission = @import("admission");
 const Id = bnd.source.Id;
 const B = bnd.source.Builder;
@@ -52,10 +52,10 @@ const Fixture = struct {
 
     fn compile(self: *Fixture) !void {
         try self.check();
-        try self.boundaryCompile();
+        try self.horosCompile();
     }
 
-    fn boundaryCompile(self: *Fixture) !void {
+    fn horosCompile(self: *Fixture) !void {
         var compiled = try bnd.program.compile(allocator, self.b.module(self.entry, self.unit));
         defer compiled.deinit();
     }
@@ -272,7 +272,7 @@ test "application cannot handle protected authority even outside speculation" {
     try f.b.define(body, perform);
     try f.registry.protectSite(body, perform, effect);
     try f.b.define(f.entry, try localHandler(&f, effect, body, false));
-    try f.boundaryCompile();
+    try f.horosCompile();
     try std.testing.expectError(error.ProtectedHandler, f.check());
 }
 
@@ -296,7 +296,7 @@ test "speculation cannot hide unclassified effects behind local handler" {
     try f.b.define(body, try performHandled(&f, body, effect));
     try f.b.define(f.entry, try localHandler(&f, effect, body, false));
     try f.registry.speculate(f.entry, &.{});
-    try f.boundaryCompile();
+    try f.horosCompile();
     try std.testing.expectError(error.SpeculativeEffect, f.check());
 }
 
@@ -358,7 +358,7 @@ test "raw multi handler cannot omit speculative effect checks" {
     try f.b.define(body, try f.b.bind(try f.b.variable(f.unit), try performHandled(&f, body, choice), perform));
     try f.b.define(f.entry, try localHandler(&f, choice, body, true));
     f.b.functions.items[@intCast(f.entry)].effects = &.{write};
-    try f.boundaryCompile();
+    try f.horosCompile();
     try std.testing.expectError(error.SpeculativeEffect, f.check());
 }
 
@@ -554,7 +554,7 @@ test "model live observation and mobility effects cannot be locally substituted"
         try f.registry.protectSite(body, request, effect);
         try f.b.define(body, request);
         try f.b.define(f.entry, try localHandler(&f, effect, body, false));
-        try f.boundaryCompile();
+        try f.horosCompile();
         try std.testing.expectError(error.ProtectedHandler, f.check());
     }
 }
@@ -575,7 +575,7 @@ test "raw model requests require the checked emission owner" {
     const effect = try f.effect("agent.model.invoke.v3", .model);
     f.b.functions.items[@intCast(f.entry)].effects = &.{effect};
     try f.b.define(f.entry, try f.perform(effect));
-    try f.boundaryCompile();
+    try f.horosCompile();
     try std.testing.expectError(error.ProtectedEffectBypass, f.check());
 }
 test "delayed shallow package resumed under hidden-effect multi successor" {
@@ -621,6 +621,6 @@ test "delayed shallow package resumed under hidden-effect multi successor" {
     const module = b.module(root, unit);
     var compiled = try bnd.program.compile(a, module);
     defer compiled.deinit();
-    // Rejection must be Agent's role check, after independent Boundary compile.
+    // Rejection must be Protean's role check, after independent Horos compile.
     try std.testing.expectError(error.SpeculativeEffect, admission.verify(a, module, &registry));
 }

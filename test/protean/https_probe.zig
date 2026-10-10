@@ -1,6 +1,6 @@
 //! Small native HTTPS probe driven by the independent controlled endpoint.
 const std = @import("std");
-const native = @import("agent_native");
+const native = @import("protean_native");
 
 pub fn main(init: std.process.Init) !void {
     var args = init.minimal.args.iterate();

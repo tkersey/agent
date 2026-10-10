@@ -1,10 +1,10 @@
 const std = @import("std");
-const boundary = @import("boundary");
-const agent = @import("agent");
-const catalogs = agent.catalogs;
+const horos = @import("horos");
+const protean = @import("protean");
+const catalogs = protean.catalogs;
 const allocator = std.testing.allocator;
 
-const Writer = agent.model(.{
+const Writer = protean.model(.{
     .name = "writer",
     .protocol = struct {
         pub const semantic_identity = "agent.model.protocol.openai-responses-v2";
@@ -12,8 +12,8 @@ const Writer = agent.model(.{
     .model = "fixture-writer",
     .parameters = .{ .max_output_tokens = @as(u32, 1024), .temperature = "0.25" },
 });
-const Instructions = agent.prompt.literal(.{ .role = .developer, .content = "Preserve meaning." });
-const Revision = agent.skill(.{
+const Instructions = protean.prompt.literal(.{ .role = .developer, .content = "Preserve meaning." });
+const Revision = protean.skill(.{
     .id = "revision",
     .description = "Review a document",
     .instructions = "Read before proposing.",
@@ -24,8 +24,8 @@ const Revision = agent.skill(.{
 });
 
 const Read = struct {
-    pub fn declare(c: agent.Context) !agent.tools.Descriptor {
-        const text = try c.schema(agent.contracts.Utf8);
+    pub fn declare(c: protean.Context) !protean.tools.Descriptor {
+        const text = try c.schema(protean.contracts.Utf8);
         return .{
             .identity = "document.read",
             .payload = text,
@@ -39,21 +39,21 @@ const Read = struct {
     }
 };
 const Message = struct {
-    pub fn declare(c: agent.Context) !agent.interaction.Definition {
+    pub fn declare(c: protean.Context) !protean.interaction.Definition {
         const unit = try c.schema(void);
-        return agent.interaction.define(c.builder, .{
+        return protean.interaction.define(c.builder, .{
             .name = "message",
             .channel = unit,
             .purpose = unit,
             .presentation = unit,
-            .outgoing = try c.schema(agent.contracts.Utf8),
+            .outgoing = try c.schema(protean.contracts.Utf8),
             .input = unit,
         });
     }
 };
 
 const Configured = struct {
-    pub fn emit(c: agent.Context) !boundary.source.Module {
+    pub fn emit(c: protean.Context) !horos.source.Module {
         const model = try c.catalogs.model("writer");
         const prompt = try c.catalogs.prompt(0);
         const skill = try c.catalogs.skill("revision");
@@ -80,7 +80,7 @@ const Configured = struct {
 
 test "supplied catalogs install before application and become ordinary program constants" {
     const Result = struct { model: catalogs.ModelValue, prompt: catalogs.PromptValue };
-    const System = agent.system(.{
+    const System = protean.system(.{
         .InitialArgs = void,
         .Result = Result,
         .Failure = void,
@@ -91,9 +91,9 @@ test "supplied catalogs install before application and become ordinary program c
         .interactions = .{Message},
         .application = Configured,
     });
-    var compiled = try agent.compile(allocator, System);
+    var compiled = try protean.compile(allocator, System);
     defer compiled.deinit();
-    const expected = try agent.contracts.encodeOwned(catalogs.ModelValue, allocator, .{
+    const expected = try protean.contracts.encodeOwned(catalogs.ModelValue, allocator, .{
         .protocol = .{ .bytes = Writer.protocol.semantic_identity },
         .model = .{ .bytes = "fixture-writer" },
         .parameters = .{
@@ -110,7 +110,7 @@ test "supplied catalogs install before application and become ordinary program c
 }
 
 const Empty = struct {
-    pub fn emit(c: agent.Context) !boundary.source.Module {
+    pub fn emit(c: protean.Context) !horos.source.Module {
         const unit = try c.schema(void);
         const entry = try c.builder.declare(&.{unit}, unit, &.{}, &.{});
         try c.builder.define(entry, try c.builder.pure(try c.literal(void, {})));
@@ -119,7 +119,7 @@ const Empty = struct {
 };
 
 test "omitted and explicitly empty catalogs preserve ordinary emitter compatibility" {
-    const System = agent.system(.{
+    const System = protean.system(.{
         .InitialArgs = void,
         .Result = void,
         .Failure = void,
@@ -130,7 +130,7 @@ test "omitted and explicitly empty catalogs preserve ordinary emitter compatibil
         .interactions = .{},
         .application = Empty,
     });
-    var compiled = try agent.compile(allocator, System);
+    var compiled = try protean.compile(allocator, System);
     defer compiled.deinit();
 }
 
@@ -158,7 +158,7 @@ test "duplicate model and skill identities reject at source admission" {
 }
 
 test "skill tool references are names rather than callback or numeric selectors" {
-    const BadSkill = agent.skill(.{
+    const BadSkill = protean.skill(.{
         .id = "bad",
         .description = "Bad reference",
         .instructions = "Do something",
@@ -171,51 +171,51 @@ test "skill tool references are names rather than callback or numeric selectors"
 }
 
 test "unsupported model protocols and invalid declared text reject before emission" {
-    const Unsupported = agent.model(.{
+    const Unsupported = protean.model(.{
         .name = "other",
         .protocol = struct {
             pub const semantic_identity = "different";
         },
         .model = "not-the-declared-provider",
     });
-    const InvalidText = agent.prompt.literal(.{ .role = .system, .content = "\xff" });
+    const InvalidText = protean.prompt.literal(.{ .role = .system, .content = "\xff" });
     try std.testing.expectEqual(catalogs.SourceIssue.UnsupportedModelProtocol, comptime catalogs.sourceIssue(.{ .models = .{Unsupported} }).?);
     try std.testing.expectEqual(catalogs.SourceIssue.InvalidDescriptorText, comptime catalogs.sourceIssue(.{ .prompts = .{InvalidText} }).?);
 }
 
 test "dangling skill references reject even when application never looks up that skill" {
-    const System = agent.system(.{
+    const System = protean.system(.{
         .InitialArgs = void,
         .Result = void,
         .Failure = void,
         .skills = .{Revision},
         .application = Empty,
     });
-    try std.testing.expectError(error.UnknownSkillTool, agent.compile(allocator, System));
+    try std.testing.expectError(error.UnknownSkillTool, protean.compile(allocator, System));
 }
 
 test "duplicate installed tool and interaction identities reject" {
-    const Tools = agent.system(.{
+    const Tools = protean.system(.{
         .InitialArgs = void,
         .Result = void,
         .Failure = void,
         .tools = .{ Read, Read },
         .application = Empty,
     });
-    try std.testing.expectError(error.DuplicateToolDeclaration, agent.compile(allocator, Tools));
-    const Interactions = agent.system(.{
+    try std.testing.expectError(error.DuplicateToolDeclaration, protean.compile(allocator, Tools));
+    const Interactions = protean.system(.{
         .InitialArgs = void,
         .Result = void,
         .Failure = void,
         .interactions = .{ Message, Message },
         .application = Empty,
     });
-    try std.testing.expectError(error.DuplicateInteractionName, agent.compile(allocator, Interactions));
+    try std.testing.expectError(error.DuplicateInteractionName, protean.compile(allocator, Interactions));
 }
 
 test "bad initial result and variable bindings reject without indexing invalid source" {
     const Bad = struct {
-        pub fn emit(c: agent.Context) !boundary.source.Module {
+        pub fn emit(c: protean.Context) !horos.source.Module {
             const unit = try c.schema(void);
             const entry = try c.builder.declare(&.{unit}, unit, &.{}, &.{});
             c.builder.functions.items[@intCast(entry)].parameters = &.{std.math.maxInt(u64)};
@@ -223,23 +223,23 @@ test "bad initial result and variable bindings reject without indexing invalid s
             return c.builder.module(entry, unit);
         }
     };
-    const System = agent.system(.{
+    const System = protean.system(.{
         .InitialArgs = void,
         .Result = void,
         .Failure = void,
         .application = Bad,
     });
-    try std.testing.expectError(error.TypeMismatch, agent.compile(allocator, System));
+    try std.testing.expectError(error.TypeMismatch, protean.compile(allocator, System));
 }
 
 test "declared result type cannot be silently ignored" {
-    const System = agent.system(.{
+    const System = protean.system(.{
         .InitialArgs = void,
         .Result = u32,
         .Failure = void,
         .application = Empty,
     });
-    try std.testing.expectError(error.TypeMismatch, agent.compile(allocator, System));
+    try std.testing.expectError(error.TypeMismatch, protean.compile(allocator, System));
 }
 
 test "only private descriptor constructors admit public metadata on Zig 0.17" {

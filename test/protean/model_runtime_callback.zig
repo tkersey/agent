@@ -1,5 +1,5 @@
-const agent = @import("agent");
-const Invalid = agent.model_invocation.Profile(union(enum) { answer: struct { value: u32 } }, .{
+const protean = @import("protean");
+const Invalid = protean.model_invocation.Profile(union(enum) { answer: struct { value: u32 } }, .{
     .{ .name = "answer", .description = "Answer.", .execute = callback },
 }, .{
     .model_id_bytes = 32,

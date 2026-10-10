@@ -1,8 +1,8 @@
 const std = @import("std");
-const agent = @import("agent");
-const native = @import("agent_native");
-const contracts = agent.contracts;
-const P = agent.model_invocation.Profile(union(enum) { choose: struct { value: u64 } }, .{.{ .name = "choose", .description = "Choose an exact integer." }}, .{
+const protean = @import("protean");
+const native = @import("protean_native");
+const contracts = protean.contracts;
+const P = protean.model_invocation.Profile(union(enum) { choose: struct { value: u64 } }, .{.{ .name = "choose", .description = "Choose an exact integer." }}, .{
     .model_id_bytes = 128,
     .temperature_bytes = 32,
     .maximum_messages = 4,
@@ -14,18 +14,18 @@ const P = agent.model_invocation.Profile(union(enum) { choose: struct { value: u
     .provider_response_bytes = 4096,
 });
 const Adapter = native.responses.Adapter(P);
-const Q = agent.model_invocation.Profile(union(enum) { other: struct { flag: bool } }, .{.{ .name = "other", .description = "Choose a flag." }}, P.representation);
+const Q = protean.model_invocation.Profile(union(enum) { other: struct { flag: bool } }, .{.{ .name = "other", .description = "Choose a flag." }}, P.representation);
 const PairInput = struct { first: P.ReferenceRequest, second: Q.ReferenceRequest };
 const PairApplication = struct {
-    pub fn emit(c: agent.Context) !@import("boundary").source.Module {
+    pub fn emit(c: protean.Context) !@import("horos").source.Module {
         const b = c.builder;
         const unit = try c.schema(void);
-        const first = try agent.responders.defineReferenceModelObserved(P, c, try b.constant(void, {}), false);
-        const second = try agent.responders.defineReferenceModelObserved(Q, c, try b.constant(void, {}), false);
+        const first = try protean.responders.defineReferenceModelObserved(P, c, try b.constant(void, {}), false);
+        const second = try protean.responders.defineReferenceModelObserved(Q, c, try b.constant(void, {}), false);
         const entry = try b.declare(&.{try c.schema(PairInput)}, unit, &.{ b.functions.items[first].effects[0], b.functions.items[second].effects[0] }, &.{});
         const input = try b.reference(b.parameter(entry, 0));
-        const first_result = try b.variable(try c.schema(agent.responders.ReferenceModelObservation(P, false)));
-        const second_result = try b.variable(try c.schema(agent.responders.ReferenceModelObservation(Q, false)));
+        const first_result = try b.variable(try c.schema(protean.responders.ReferenceModelObservation(P, false)));
+        const second_result = try b.variable(try c.schema(protean.responders.ReferenceModelObservation(Q, false)));
         const offered = try c.literal([1]bool, .{true});
         const call_first = try b.term(.{ .call = .{ .function = first, .arguments = &.{ try b.primitive(try c.schema(P.ReferenceRequest), .field, &.{input}, 0), offered } } });
         const call_second = try b.term(.{ .call = .{ .function = second, .arguments = &.{ try b.primitive(try c.schema(Q.ReferenceRequest), .field, &.{input}, 1), offered } } });
@@ -38,11 +38,11 @@ test "native emitter binds authored model specializations to exact schemas and r
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const a = arena.allocator();
-    const System = agent.system(.{ .InitialArgs = PairInput, .Result = void, .Failure = void, .application = PairApplication });
-    var compiled = try agent.compile(a, System);
+    const System = protean.system(.{ .InitialArgs = PairInput, .Result = void, .Failure = void, .application = PairApplication });
+    var compiled = try protean.compile(a, System);
     defer compiled.deinit();
     const emit = @import("native_asset_writer");
-    const identity = agent.model_invocation.reference_semantic_identity;
+    const identity = protean.model_invocation.reference_semantic_identity;
     const first = .{ .identity = identity, .resource_role = "first-provider", .Payload = P.ReferenceRequest, .Reply = P.ReferenceResult };
     const second = .{ .identity = identity, .resource_role = "second-provider", .Payload = Q.ReferenceRequest, .Reply = Q.ReferenceResult };
     var first_handler = Adapter.declaration();
@@ -103,7 +103,7 @@ const Objects = struct {
 };
 fn request() P.ReferenceRequest {
     return .{ .profile = digest(profile), .replay = null, .results = .{ .items = &.{} }, .invocation = .{
-        .protocol = .{ .bytes = agent.model_invocation.protocol_identity },
+        .protocol = .{ .bytes = protean.model_invocation.protocol_identity },
         .model = .{ .bytes = "fixture-model" },
         .parameters = .{ .max_output_tokens = 4096, .temperature = null, .reasoning = .{ .effort = .medium, .summary = null } },
         .messages = .{ .items = &.{.{ .role = .user, .content = .{ .bytes = "inspect 雪" } }} },
@@ -121,7 +121,7 @@ test "adaptive admission binds selected profiles and skill permissions to the fr
     const a = arena.allocator();
     const Admission = native.adaptive_responses.Admission(P);
     const body = "Inspect the invariant with actual source evidence.";
-    const resource: agent.model_invocation.ArtifactReference = .{ .digest = digest(body), .bytes = body.len };
+    const resource: protean.model_invocation.ArtifactReference = .{ .digest = digest(body), .bytes = body.len };
     const catalog_bytes = try contracts.encodeOwned(P.AdaptiveCatalog, a, .{ .skills = .{ .items = &.{.{
         .id = .{ .bytes = "invariant-review" },
         .version = .{ .bytes = "1" },
@@ -130,7 +130,7 @@ test "adaptive admission binds selected profiles and skill permissions to the fr
         .tools = .{true},
     }} } });
     var objects: Objects = .{ .bytes = catalog_bytes, .raw = body };
-    const inference: agent.model_invocation.AdaptiveInferenceProfile = .{
+    const inference: protean.model_invocation.AdaptiveInferenceProfile = .{
         .id = .{ .bytes = "analysis" },
         .model = .{ .bytes = "fixture-model" },
         .reasoning_mode = .standard,
@@ -169,7 +169,7 @@ test "adaptive admission binds selected profiles and skill permissions to the fr
     denied.permitted_tools = .{false};
     try std.testing.expectError(error.InvalidSkill, Admission.validateCatalog(denied, skills.value));
     try std.testing.expectError(error.InvalidSkill, Admission.catalog(ctx, denied));
-    var materialization = [_]agent.model_invocation.SkillMaterialization{.{
+    var materialization = [_]protean.model_invocation.SkillMaterialization{.{
         .resource = resource,
         .skill_id = .{ .bytes = "invariant-review" },
         .version = .{ .bytes = "1" },

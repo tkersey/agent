@@ -1,24 +1,24 @@
 const std = @import("std");
-const boundary = @import("boundary");
-const equality = @import("agent").value_equality;
-const world = @import("world");
-const Id = boundary.source.Id;
+const horos = @import("horos");
+const equality = @import("protean").value_equality;
+const kronos = @import("kronos");
+const Id = horos.source.Id;
 
-fn observe(program: boundary.data.activation.Program, left: []const u8, right: []const u8, expected: bool) !void {
+fn observe(program: horos.data.activation.Program, left: []const u8, right: []const u8, expected: bool) !void {
     const args = try std.mem.concat(std.testing.allocator, u8, &.{ left, right });
     defer std.testing.allocator.free(args);
-    const storage = try std.testing.allocator.alloc(u8, try boundary.data.program_image.encodedLength(program));
+    const storage = try std.testing.allocator.alloc(u8, try horos.data.program_image.encodedLength(program));
     defer std.testing.allocator.free(storage);
-    const image = try boundary.data.program_image.encode(std.testing.allocator, program, storage);
-    var outcome = try world.invocation.invoke(std.testing.allocator, .{ .image = image, .instance = .{ .initial_args = args } });
+    const image = try horos.data.program_image.encode(std.testing.allocator, program, storage);
+    var outcome = try kronos.invocation.invoke(std.testing.allocator, .{ .image = image, .instance = .{ .initial_args = args } });
     defer outcome.deinit();
     try std.testing.expect(outcome.record == .completed);
     try std.testing.expectEqualSlices(u8, &.{@intFromBool(expected)}, outcome.record.completed);
 }
 
-fn check(b: *boundary.source.Builder, schema: Id, left: []const u8, right: []const u8) !void {
-    const c = try boundary.authoring.Context.init(b);
-    const contract = try boundary.authoring.interop.schema(c, schema);
+fn check(b: *horos.source.Builder, schema: Id, left: []const u8, right: []const u8) !void {
+    const c = try horos.authoring.Context.init(b);
+    const contract = try horos.authoring.interop.schema(c, schema);
     const function = try equality.create(c, contract, try c.literalFailure(void, {}));
     var compiled = try c.compile(std.testing.allocator, function, try c.scalar(void));
     defer compiled.deinit();
@@ -28,8 +28,8 @@ fn check(b: *boundary.source.Builder, schema: Id, left: []const u8, right: []con
     try observe(compiled.program, right, left, false);
 }
 
-test "unchanged native World executes structural equality including recursive values" {
-    var b = boundary.source.Builder.init(std.testing.allocator);
+test "unchanged native Kronos executes structural equality including recursive values" {
+    var b = horos.source.Builder.init(std.testing.allocator);
     defer b.deinit();
     const unit = try b.scalar(void);
     const byte = try b.scalar(u8);

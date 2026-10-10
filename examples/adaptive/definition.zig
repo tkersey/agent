@@ -1,12 +1,12 @@
 //! One authored investigation with model-callable adaptive control.
 const std = @import("std");
-const agent = @import("agent");
-const boundary = @import("boundary");
-const a = boundary.authoring;
+const protean = @import("protean");
+const horos = @import("horos");
+const a = horos.authoring;
 const t = @import("application_types");
 const P = t.P;
 const V = *const a.Value;
-const Inbox = agent.inbox.Profile(t.Message);
+const Inbox = protean.inbox.Profile(t.Message);
 pub const capabilities = .{
     .{ .identity = t.bindings_identity, .resource_role = "snapshot" },
     .{ .identity = t.prepare_identity, .resource_role = "context" },
@@ -15,7 +15,7 @@ pub const capabilities = .{
     .{ .identity = t.tool_build_identity, .resource_role = "tool-construction" },
     .{ .identity = t.tool_run_identity, .resource_role = "tool-execution" },
     .{ .identity = t.question_identity, .resource_role = "user" },
-    .{ .identity = agent.inbox.semantic_identity, .resource_role = "user" },
+    .{ .identity = protean.inbox.semantic_identity, .resource_role = "user" },
     .{ .identity = P.adaptive_identity, .resource_role = "inference" },
 };
 pub const resources = .{
@@ -29,16 +29,16 @@ pub const resources = .{
 pub fn generatedResources(allocator: std.mem.Allocator) ![1]struct { id: []const u8, version: []const u8, media_type: []const u8, bytes: []const u8 } {
     return .{.{ .id = "tool-construction.catalog", .version = "1", .media_type = "application/octet-stream", .bytes = try @import("tool_catalog.zig").catalog(allocator) }};
 }
-pub const System = agent.system(.{ .InitialArgs = t.Input, .Result = t.Output, .Failure = t.Failure, .application = Application });
+pub const System = protean.system(.{ .InitialArgs = t.Input, .Result = t.Output, .Failure = t.Failure, .application = Application });
 
 const Emit = struct {
-    context: agent.Context,
+    context: protean.Context,
     author: *a.Context,
     fn schema(e: Emit, comptime T: type) anyerror!*const a.Schema {
         switch (@typeInfo(T)) {
             .optional => |info| return e.author.alternatives(&.{ .{ .name = "none", .schema = try e.schema(void) }, .{ .name = "some", .schema = try e.schema(info.child) } }),
             .@"struct" => |info| {
-                if (@hasDecl(T, "agent_value_kind")) return a.interop.schema(e.author, try e.context.schema(T));
+                if (@hasDecl(T, "protean_value_kind")) return a.interop.schema(e.author, try e.context.schema(T));
                 var fields: [info.field_names.len]a.Field = undefined;
                 inline for (info.field_names, info.field_types, 0..) |name, F, i| fields[i] = .{ .name = name, .schema = try e.schema(F) };
                 return e.author.record(&fields);
@@ -63,7 +63,7 @@ const Emit = struct {
         return op;
     }
     fn sequence(e: Emit, b: *a.Body, comptime T: type, values: []const V) !V {
-        const ids = try e.context.builder.allocator().alloc(boundary.source.Id, values.len);
+        const ids = try e.context.builder.allocator().alloc(horos.source.Id, values.len);
         for (values, ids) |value, *id| id.* = try a.interop.valueId(b, value);
         return a.interop.adoptValue(b, try e.context.builder.primitive(try e.context.schema(T), .sequence, ids, 0), try e.schema(T));
     }
@@ -95,8 +95,8 @@ const Emit = struct {
             .{ .name = "work_calls", .value = try b.field(state, "work_calls") },
         });
     }
-    fn message(e: Emit, b: *a.Body, role: agent.model_invocation.MessageRole, text: V) !V {
-        return b.product(try e.schema(P.Message), &.{ .{ .name = "role", .value = try e.literal(b, agent.model_invocation.MessageRole, role) }, .{ .name = "content", .value = text } });
+    fn message(e: Emit, b: *a.Body, role: protean.model_invocation.MessageRole, text: V) !V {
+        return b.product(try e.schema(P.Message), &.{ .{ .name = "role", .value = try e.literal(b, protean.model_invocation.MessageRole, role) }, .{ .name = "content", .value = text } });
     }
     fn append(e: Emit, b: *a.Body, comptime T: type, list: V, item: V) !V {
         const value = try e.context.builder.value(.{ .schema = try e.context.schema(T), .expression = .{ .primitive = .{
@@ -106,8 +106,8 @@ const Emit = struct {
         } } });
         return a.interop.adoptValue(b, value, try e.schema(T));
     }
-    fn invoke(e: Emit, b: *a.Body, function: boundary.source.Id, arguments: []const V, comptime Result: type) !V {
-        const ids = try e.context.builder.allocator().alloc(boundary.source.Id, arguments.len);
+    fn invoke(e: Emit, b: *a.Body, function: horos.source.Id, arguments: []const V, comptime Result: type) !V {
+        const ids = try e.context.builder.allocator().alloc(horos.source.Id, arguments.len);
         for (ids, arguments) |*id, value| id.* = try a.interop.valueId(b, value);
         return a.interop.term(b, try e.context.builder.term(.{ .call = .{ .function = function, .arguments = ids } }), try e.schema(Result));
     }
@@ -115,7 +115,7 @@ const Emit = struct {
 
 const Ops = struct { bindings: *const a.Operation, prepare: *const a.Operation, work: *const a.Operation, ask: *const a.Operation, inspect: *const a.Operation, tool_build: *const a.Operation, tool_run: *const a.Operation, inbox: *const a.Operation, model: *const a.Operation };
 const Application = struct {
-    pub fn emit(context: agent.Context) !boundary.source.Module {
+    pub fn emit(context: protean.Context) !horos.source.Module {
         const c = try a.Context.init(context.builder);
         errdefer {
             const diagnostic = c.lastDiagnostic();
@@ -140,13 +140,13 @@ const Application = struct {
             .loop = loop,
             .source_at = try c.function("source evidence at global index", &.{ .{ .name = "evidence", .schema = try e.schema(t.EvidenceList) }, .{ .name = "index", .schema = try e.schema(u64) } }, try e.schema(?t.SourceEvidenceReference), &.{}),
             .has_source = try c.function("source evidence availability", &.{ .{ .name = "evidence", .schema = try e.schema(t.EvidenceList) }, .{ .name = "index", .schema = try e.schema(u64) } }, try e.schema(bool), &.{}),
-            .responder = try agent.responders.defineAdaptiveModelObserved(P, context, try context.literal(t.Failure, .invalid_response), false),
+            .responder = try protean.responders.defineAdaptiveModelObserved(P, context, try context.literal(t.Failure, .invalid_response), false),
             .inference = try t.controls.defineInference(context, try context.literal(t.Failure, .capacity)),
             .skill = try t.controls.defineSkill(P, context, try context.literal(t.Failure, .capacity)),
         };
         try program.defineEvidence();
         try program.defineLoop();
-        const entry = try c.function("adaptive-agent", &.{.{ .name = "input", .schema = try e.schema(t.Input) }}, try e.schema(t.Output), &.{ ops.bindings, ops.prepare, ops.work, ops.ask, ops.inspect, ops.tool_build, ops.tool_run, ops.inbox, ops.model });
+        const entry = try c.function("protean", &.{.{ .name = "input", .schema = try e.schema(t.Input) }}, try e.schema(t.Output), &.{ ops.bindings, ops.prepare, ops.work, ops.ask, ops.inspect, ops.tool_build, ops.tool_run, ops.inbox, ops.model });
         const root = try c.body(entry);
         const frozen = try root.perform(ops.bindings, try root.constant(void, {}));
         const task = try root.field(try root.parameter("input"), "task");
@@ -184,9 +184,9 @@ const Program = struct {
     loop: *const a.Function,
     source_at: *const a.Function,
     has_source: *const a.Function,
-    responder: boundary.source.Id,
-    inference: boundary.source.Id,
-    skill: boundary.source.Id,
+    responder: horos.source.Id,
+    inference: horos.source.Id,
+    skill: horos.source.Id,
 
     fn defineEvidence(p: Program) !void {
         const e = p.e;
@@ -261,7 +261,7 @@ const Program = struct {
         const work = ready.body();
         const request = try work.field(ready.payload(), "request");
         const counted = try e.update(work, state, .{ .model_calls = try work.checkedAdd(try work.field(state, "model_calls"), try work.constant(u16, 1), try e.failure()), .messages = try e.literal(work, P.Messages, .{ .items = &.{} }), .results = try e.literal(work, t.PendingResults, .{ .items = &.{} }) });
-        const observation = try e.invoke(work, p.responder, &.{ request, try work.field(request, "offered") }, agent.responders.AdaptiveModelObservation(P, false));
+        const observation = try e.invoke(work, p.responder, &.{ request, try work.field(request, "offered") }, protean.responders.AdaptiveModelObservation(P, false));
         const normalized = try work.field(observation, "normalized");
         const interpretation = try work.field(observation, "interpretation");
         const accepted = try work.caseOf(interpretation, "accepted");

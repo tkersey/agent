@@ -1,4 +1,4 @@
-// External fixture controller for the copied native World host. Fixture indexes
+// External fixture controller for the copied native Kronos host. Fixture indexes
 // choose prescribed provider replies, never the agent's policy or continuation.
 import assert from 'node:assert/strict';
 import {createServer} from 'node:https';
@@ -7,7 +7,7 @@ import {once} from 'node:events';
 import {mkdir, writeFile, readFile} from 'node:fs/promises';
 import {spawnSync} from 'node:child_process';
 import {join} from 'node:path';
-import {AgentClient} from '../support/stdio-client.mts';
+import {ProteanClient} from '../support/stdio-client.mts';
 import {certificates} from '../support/tls.mjs';
 import {readArchive, missingCaptures, tamperedAdaptiveControl, missingCheckpoint, changedProfile, extraPrivateArtifact, omittedAttempts, changedOperationKey, invalidEventData} from './native_archive.mjs';
 import {decodeValue, encodeValue} from '../support/values.mjs';
@@ -207,7 +207,7 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
   };
   let client;
   const launch = async (extra, selectedState = state) => {
-    client = new AgentClient(app.command, ['--state-dir', selectedState, '--authorize-inference', '--test-provider', '--trust-root', trust, ...extra], {cwd: app.data, env: {PATH: '/nonexistent'}});
+    client = new ProteanClient(app.command, ['--state-dir', selectedState, '--authorize-inference', '--test-provider', '--trust-root', trust, ...extra], {cwd: app.data, env: {PATH: '/nonexistent'}});
     await client.initialize(); return client;
   };
   const artifact = async (taskId, ref) => {

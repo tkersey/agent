@@ -1,7 +1,7 @@
 //! Immutable work results keep the authored continuation independent of page size.
 const std = @import("std");
-const native = @import("agent_native");
-const contracts = @import("agent_contracts");
+const native = @import("protean_native");
+const contracts = @import("protean_contracts");
 const t = @import("application_types");
 const P = t.P;
 const Adapter = native.adaptive_responses.Adapter(P);

@@ -1,10 +1,10 @@
 //! One application state and the additive adaptive Responses contract.
-const agent = @import("agent");
+const protean = @import("protean");
 const std = @import("std");
-const contracts = @import("agent_contracts");
+const contracts = @import("protean_contracts");
 pub const tool_types = @import("tool_types.zig");
-pub const controls = agent.adaptive_controls;
-pub const model = agent.model_invocation;
+pub const controls = protean.adaptive_controls;
+pub const model = protean.model_invocation;
 pub const application_id = "adaptive-agent";
 pub const application_version = "2.0.0";
 pub const input_schema_id = "adaptive-agent.input.v1";
@@ -50,8 +50,8 @@ pub const P = model.Profile(Action, .{
     .{ .name = "inference_set", .description = "Select an approved profile and effort for the next inference, using the current control revision." },
     .{ .name = "skill_set", .description = "Load, deactivate or physically unload a pinned approved skill. Use an exact version and current control revision." },
     .{ .name = "inspect", .description = "Locate guard-like lines in source-file evidence by its global evidence_index. Generated results are not source files. Requires an active invariant-review skill; it is not a correctness proof." },
-    .{ .name = "tool_build", .description = "Construct a pure Boundary program from a closed JSON link recipe over the admitted component catalog. Construction does not execute it or establish task correctness." },
-    .{ .name = "tool_run", .description = "Run an admitted generated program on one authorized compatible input reference through native World." },
+    .{ .name = "tool_build", .description = "Construct a pure Horos program from a closed JSON link recipe over the admitted component catalog. Construction does not execute it or establish task correctness." },
+    .{ .name = "tool_run", .description = "Run an admitted generated program on one authorized compatible input reference through native Kronos." },
 }, .{ .model_id_bytes = 128, .temperature_bytes = 32, .maximum_messages = 4, .message_bytes = model.maximum_adaptive_request_bytes, .maximum_output_items = 8, .call_id_bytes = 128, .arguments_json_bytes = 16384, .result_text_bytes = 32768, .provider_response_bytes = 512 * 1024, .maximum_adaptive_reply_bytes = 16 * 1024 });
 pub fn ordinal(comptime name: []const u8) usize {
     return @backingInt(@field(std.meta.Tag(Action), name));
@@ -197,7 +197,7 @@ pub const ToolConfiguration = struct { build: bool, run: bool, inputs: contracts
 pub const ConfigurationV2 = struct { schema: contracts.Text(64), adaptive: Configuration, tools: ToolConfiguration };
 pub const ToolInputReference = struct { id: contracts.Text(64), description: contracts.Text(256), object: model.ArtifactReference };
 pub const ToolPolicy = struct { build: bool, run: bool, catalog: model.ArtifactReference, inputs: contracts.Vector(ToolInputReference, 4) };
-// Ordinary wire contracts accompany the emitted Boundary image. External
+// Ordinary wire contracts accompany the emitted Horos image. External
 // inspection tools can decode them without an adaptive execution implementation.
 pub const support_types = .{
     .{ .name = "Unit", .T = void },
@@ -242,5 +242,5 @@ pub const support_types = .{
     .{ .name = "Catalog", .T = P.AdaptiveCatalog },
     .{ .name = "Input", .T = Input },
     .{ .name = "Output", .T = Output },
-    .{ .name = "Inbox", .T = agent.inbox.Profile(Message).Reply },
+    .{ .name = "Inbox", .T = protean.inbox.Profile(Message).Reply },
 };

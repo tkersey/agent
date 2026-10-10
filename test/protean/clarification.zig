@@ -1,10 +1,10 @@
-//! Independent numeric decision oracle executed by unchanged native World.
+//! Independent numeric decision oracle executed by unchanged native Kronos.
 const std = @import("std");
-const agent = @import("agent");
-const boundary = @import("boundary");
-const world = @import("world");
-const source = boundary.source;
-const clarification = agent.clarification;
+const protean = @import("protean");
+const horos = @import("horos");
+const kronos = @import("kronos");
+const source = horos.source;
+const clarification = protean.clarification;
 const a = std.testing.allocator;
 const Known = struct { candidate: u64, key: u64 };
 const Assessed = union(enum) { known: Known, unavailable, rejected, inconclusive };
@@ -37,31 +37,31 @@ const Fixture = struct {
             .failure = try b.constant(void, {}),
         });
         // Independent native wire types must match the exported source schemas.
-        try std.testing.expectEqual(try agent.contracts.schema(Classification, &b), d.types.classification);
+        try std.testing.expectEqual(try protean.contracts.schema(Classification, &b), d.types.classification);
         const entry = if (select) d.select else d.classify;
-        return .{ .compiled = try boundary.program.compile(a, b.module(entry, try b.scalar(void))) };
+        return .{ .compiled = try horos.program.compile(a, b.module(entry, try b.scalar(void))) };
     }
 
     fn deinit(f: *Fixture) void {
         f.compiled.deinit();
     }
 
-    fn run(f: Fixture, comptime In: type, comptime Out: type, input: In) !agent.contracts.Decoded(Out) {
-        const args = try agent.contracts.encodeOwned(In, a, input);
+    fn run(f: Fixture, comptime In: type, comptime Out: type, input: In) !protean.contracts.Decoded(Out) {
+        const args = try protean.contracts.encodeOwned(In, a, input);
         defer a.free(args);
-        const invocation_image_0 = try a.alloc(u8, try boundary.data.program_image.encodedLength(f.compiled.program));
+        const invocation_image_0 = try a.alloc(u8, try horos.data.program_image.encodedLength(f.compiled.program));
         defer a.free(invocation_image_0);
-        _ = try boundary.data.program_image.encode(a, f.compiled.program, invocation_image_0);
-        var outcome = try world.invocation.invoke(a, .{
+        _ = try horos.data.program_image.encode(a, f.compiled.program, invocation_image_0);
+        var outcome = try kronos.invocation.invoke(a, .{
             .image = invocation_image_0,
             .instance = .{ .initial_args = args },
         });
         defer outcome.deinit();
         try std.testing.expect(outcome.record == .completed);
-        return agent.contracts.decodeOwned(Out, a, outcome.record.completed);
+        return protean.contracts.decodeOwned(Out, a, outcome.record.completed);
     }
 
-    fn classify(f: Fixture, input: Input) !agent.contracts.Decoded(Classification) {
+    fn classify(f: Fixture, input: Input) !protean.contracts.Decoded(Classification) {
         return f.run(Input, Classification, input);
     }
 };
@@ -169,7 +169,7 @@ test "selection accepts offered group IDs and rejects an unoffered member or for
 }
 
 const Id = source.Id;
-const NumericModel = agent.model(.{
+const NumericModel = protean.model(.{
     .name = "clarification-numeric-test",
     .model = "fixture-model",
     .protocol = struct {
@@ -177,7 +177,7 @@ const NumericModel = agent.model(.{
     },
 });
 const NumericAction = union(enum) { score: struct { value: u64 } };
-const P = agent.model_invocation.Profile(NumericAction, .{.{ .name = "score", .description = "Assess the numeric alternative." }}, .{
+const P = protean.model_invocation.Profile(NumericAction, .{.{ .name = "score", .description = "Assess the numeric alternative." }}, .{
     .model_id_bytes = 32,
     .temperature_bytes = 8,
     .maximum_messages = 4,
@@ -196,9 +196,9 @@ const Composition = struct {
     fn init(allocator: std.mem.Allocator, count: usize) !Composition {
         var b = source.Builder.init(allocator);
         defer b.deinit();
-        var registry = agent.admission.Registry.init(b.allocator());
+        var registry = protean.admission.Registry.init(b.allocator());
         defer registry.deinit();
-        const c = agent.Context{ .builder = &b, .registry = &registry };
+        const c = protean.Context{ .builder = &b, .registry = &registry };
         const unit = try b.scalar(void);
         const integer = try b.scalar(u64);
         const ids = try b.schema(.{ .seq = integer });
@@ -224,7 +224,7 @@ const Composition = struct {
                 .residual = .{ .effects = &.{model} },
             },
         });
-        const exchange = try agent.interaction.define(&b, .{
+        const exchange = try protean.interaction.define(&b, .{
             .name = "test.clarification.choice",
             .channel = unit,
             .purpose = unit,
@@ -244,16 +244,16 @@ const Composition = struct {
         });
         try b.define(entry, try b.bind(classified, try clarification.explore(c, d, body, &.{}, try b.constant(bool, false)), next));
         const module = b.module(entry, unit);
-        try agent.admission.verify(allocator, module, &registry);
+        try protean.admission.verify(allocator, module, &registry);
         return .{
-            .compiled = try boundary.program.compile(allocator, module),
+            .compiled = try horos.program.compile(allocator, module),
             .source_functions = b.functions.items.len,
             .source_terms = b.terms.items.len,
         };
     }
 };
 
-fn compositionResolver(b: *source.Builder, d: clarification.Definition, exchange: agent.interaction.Definition) !Id {
+fn compositionResolver(b: *source.Builder, d: clarification.Definition, exchange: protean.interaction.Definition) !Id {
     const integer = try b.scalar(u64);
     const present = try b.declare(&.{ integer, d.types.choice }, exchange.contract.outgoing, &.{}, &.{});
     try b.define(present, try b.pure(try b.primitive(exchange.contract.outgoing, .product, &.{
@@ -269,7 +269,7 @@ fn compositionResolver(b: *source.Builder, d: clarification.Definition, exchange
     });
 }
 
-fn capturedBody(c: agent.Context, d: clarification.Definition, entry: Id, model: Id, region: Id, region_type: Id, cell_type: Id) !Id {
+fn capturedBody(c: protean.Context, d: clarification.Definition, entry: Id, model: Id, region: Id, region_type: Id, cell_type: Id) !Id {
     const b = c.builder;
     const integer = try b.scalar(u64);
     const ids = try b.schema(.{ .seq = integer });
@@ -282,7 +282,7 @@ fn capturedBody(c: agent.Context, d: clarification.Definition, entry: Id, model:
     const before = try b.variable(integer);
     const stored = try b.variable(try b.scalar(void));
     const reply = try b.variable(integer);
-    const select = try agent.deliberation.choose(b, d.multi, try b.reference(b.parameter(body, 0)), try b.reference(b.parameter(entry, 1)));
+    const select = try protean.deliberation.choose(b, d.multi, try b.reference(b.parameter(body, 0)), try b.reference(b.parameter(entry, 1)));
     const read_cell = try b.primitive(integer, .cell_get, &.{try b.reference(cell)}, 0);
     const interpreted = try b.variable(try c.schema(P.Interpretation));
     const accepted = try b.variable(try c.schema(NumericAction));
@@ -291,7 +291,7 @@ fn capturedBody(c: agent.Context, d: clarification.Definition, entry: Id, model:
     const request = try numericRequest(c, &.{
         try b.reference(prefix), try b.reference(choice), try b.reference(before),
     });
-    const perform = try agent.responders.invokeModel(P, c, d.failure, false, request, try c.literal([1]bool, .{true}));
+    const perform = try protean.responders.invokeModel(P, c, d.failure, false, request, try c.literal([1]bool, .{true}));
     const value = try b.primitive(integer, .field, &.{try b.reference(action)}, 0);
     const after = try b.bind(reply, try b.pure(value), try nonTailAssessment(b, d, reply, before, choice, read_cell));
     const chosen = try b.term(.{ .match_sum = .{
@@ -364,12 +364,12 @@ fn call(b: *source.Builder, function: Id, arguments: []const Id) !Id {
     return b.term(.{ .call = .{ .function = function, .arguments = arguments } });
 }
 
-fn respond(outcome: *world.invocation.Outcome, program: boundary.data.activation.Program, comptime T: type, value: T, statistics: ?*world.Statistics) !void {
-    const protocol = boundary.data.invocation;
+fn respond(outcome: *kronos.invocation.Outcome, program: horos.data.activation.Program, comptime T: type, value: T, statistics: ?*kronos.Statistics) !void {
+    const protocol = horos.data.invocation;
     var request_owner_0 = try protocol.decode(protocol.Request, a, outcome.record.requested.request);
     defer request_owner_0.deinit();
     const request = request_owner_0.value;
-    const bytes = try agent.contracts.encodeOwned(T, a, value);
+    const bytes = try protean.contracts.encodeOwned(T, a, value);
     defer a.free(bytes);
     const result = protocol.Result{
         .request_identity = request.request_identity,
@@ -379,20 +379,20 @@ fn respond(outcome: *world.invocation.Outcome, program: boundary.data.activation
     const encoded = try a.alloc(u8, try protocol.encodedLength(protocol.Result, result));
     defer a.free(encoded);
     _ = try protocol.encode(protocol.Result, a, result, encoded);
-    const invocation_image_1 = try a.alloc(u8, try boundary.data.program_image.encodedLength(program));
+    const invocation_image_1 = try a.alloc(u8, try horos.data.program_image.encodedLength(program));
     defer a.free(invocation_image_1);
-    _ = try boundary.data.program_image.encode(a, program, invocation_image_1);
+    _ = try horos.data.program_image.encode(a, program, invocation_image_1);
     const next = observed: {
-        const instance: boundary.data.invocation.Instance = .{ .state = outcome.record.requested.state.? };
+        const instance: horos.data.invocation.Instance = .{ .state = outcome.record.requested.state.? };
         var session = switch (instance) {
-            .initial_args => |initial| try world.Session.initImage(a, invocation_image_1, initial),
-            .state => |state| try world.Session.restoreImage(a, invocation_image_1, state),
+            .initial_args => |initial| try kronos.Session.initImage(a, invocation_image_1, initial),
+            .state => |state| try kronos.Session.restoreImage(a, invocation_image_1, state),
         };
         defer session.deinit();
         session.statistics = statistics;
         if (statistics) |observed_statistics| session.store.statistics = &observed_statistics.storage;
-        _ = try world.invocation.advance(&session, .{ .reply = encoded }, null);
-        break :observed try world.invocation.finish(a, &session, true);
+        _ = try kronos.invocation.advance(&session, .{ .reply = encoded }, null);
+        break :observed try kronos.invocation.finish(a, &session, true);
     };
     outcome.deinit();
     outcome.* = next;
@@ -402,29 +402,29 @@ test "protected composition resumes captured futures, groups non-tail results, a
     var f = try Composition.init(a, 2);
     defer f.compiled.deinit();
     const Initial = struct { context: u64, ids: []const u64 };
-    const args = try agent.contracts.encodeOwned(Initial, a, .{ .context = 77, .ids = &.{ 1, 2 } });
+    const args = try protean.contracts.encodeOwned(Initial, a, .{ .context = 77, .ids = &.{ 1, 2 } });
     defer a.free(args);
     for ([_]bool{ false, true }) |divergent| {
-        var statistics: world.Statistics = .{};
-        const invocation_image_2 = try a.alloc(u8, try boundary.data.program_image.encodedLength(f.compiled.program));
+        var statistics: kronos.Statistics = .{};
+        const invocation_image_2 = try a.alloc(u8, try horos.data.program_image.encodedLength(f.compiled.program));
         defer a.free(invocation_image_2);
-        _ = try boundary.data.program_image.encode(a, f.compiled.program, invocation_image_2);
+        _ = try horos.data.program_image.encode(a, f.compiled.program, invocation_image_2);
         var outcome = observed: {
-            const instance: boundary.data.invocation.Instance = .{ .initial_args = args };
+            const instance: horos.data.invocation.Instance = .{ .initial_args = args };
             var session = switch (instance) {
-                .initial_args => |initial| try world.Session.initImage(a, invocation_image_2, initial),
-                .state => |state| try world.Session.restoreImage(a, invocation_image_2, state),
+                .initial_args => |initial| try kronos.Session.initImage(a, invocation_image_2, initial),
+                .state => |state| try kronos.Session.restoreImage(a, invocation_image_2, state),
             };
             defer session.deinit();
             session.statistics = &statistics;
             session.store.statistics = &statistics.storage;
-            _ = try world.invocation.advance(&session, .none, null);
-            break :observed try world.invocation.finish(a, &session, true);
+            _ = try kronos.invocation.advance(&session, .none, null);
+            break :observed try kronos.invocation.finish(a, &session, true);
         };
         defer outcome.deinit();
         for (1..3) |id| {
             try std.testing.expect(outcome.record == .requested);
-            var graph = try boundary.data.state_image.decodeGraph(a, outcome.record.requested.state.?);
+            var graph = try horos.data.state_image.decodeGraph(a, outcome.record.requested.state.?);
             defer graph.deinit();
             var templates: usize = 0;
             var cells: usize = 0;
@@ -435,14 +435,14 @@ test "protected composition resumes captured futures, groups non-tail results, a
             };
             try std.testing.expectEqual(@as(usize, 1), templates);
             try std.testing.expectEqual(@as(usize, 2), cells);
-            var decoded_request_0 = try boundary.data.invocation.decode(
-                boundary.data.invocation.Request,
+            var decoded_request_0 = try horos.data.invocation.decode(
+                horos.data.invocation.Request,
                 a,
                 outcome.record.requested.request,
             );
             defer decoded_request_0.deinit();
             const request = decoded_request_0.value;
-            var received = try agent.contracts.decodeOwned(P.Request, a, request.binding.payload);
+            var received = try protean.contracts.decodeOwned(P.Request, a, request.binding.payload);
             defer received.deinit();
             const messages = received.value.messages.items;
             try std.testing.expectEqual(@as(usize, 3), messages.len);
@@ -466,15 +466,15 @@ test "protected composition resumes captured futures, groups non-tail results, a
         }
         if (divergent) {
             try std.testing.expect(outcome.record == .requested);
-            var decoded_request_1 = try boundary.data.invocation.decode(
-                boundary.data.invocation.Request,
+            var decoded_request_1 = try horos.data.invocation.decode(
+                horos.data.invocation.Request,
                 a,
                 outcome.record.requested.request,
             );
             defer decoded_request_1.deinit();
             const request = decoded_request_1.value;
             const Outgoing = struct { context: u64, choice: Choice };
-            var question = try agent.contracts.decodeOwned(Outgoing, a, request.binding.payload);
+            var question = try protean.contracts.decodeOwned(Outgoing, a, request.binding.payload);
             defer question.deinit();
             try std.testing.expectEqual(@as(u64, 77), question.value.context);
             try std.testing.expectEqual(@as(usize, 2), question.value.choice.groups.len);
@@ -485,7 +485,7 @@ test "protected composition resumes captured futures, groups non-tail results, a
         try std.testing.expect(outcome.record == .completed);
         try std.testing.expectEqual(@as(u64, 1), statistics.multi_templates);
         try std.testing.expectEqual(@as(u64, 2), statistics.branch_activations);
-        var done = try agent.contracts.decodeOwned(Resolution, a, outcome.record.completed);
+        var done = try protean.contracts.decodeOwned(Resolution, a, outcome.record.completed);
         defer done.deinit();
         if (divergent) {
             try std.testing.expect(done.value == .selected);
@@ -498,7 +498,7 @@ test "protected composition resumes captured futures, groups non-tail results, a
     }
 }
 
-fn numericRequest(c: agent.Context, values: []const Id) !Id {
+fn numericRequest(c: protean.Context, values: []const Id) !Id {
     const b = c.builder;
     const template = try P.templateValue(NumericModel, .{ .items = &.{} }, .{
         .minimum_calls = 1,
@@ -519,7 +519,7 @@ fn numericRequest(c: agent.Context, values: []const Id) !Id {
             } },
         });
         message.* = try b.primitive(try c.schema(P.Message), .product, &.{
-            try c.literal(agent.model_invocation.MessageRole, .user), bounded,
+            try c.literal(protean.model_invocation.MessageRole, .user), bounded,
         }, 0);
     }
     var fields: [@typeInfo(P.Request).@"struct".field_names.len]Id = undefined;
@@ -551,23 +551,23 @@ fn growingDomain(count: usize) !void {
     defer a.free(ids);
     for (ids, 1..) |*id, value| id.* = value;
     const Initial = struct { context: u64, ids: []const u64 };
-    const args = try agent.contracts.encodeOwned(Initial, a, .{ .context = 99, .ids = ids });
+    const args = try protean.contracts.encodeOwned(Initial, a, .{ .context = 99, .ids = ids });
     defer a.free(args);
-    var statistics: world.Statistics = .{};
-    const invocation_image_3 = try a.alloc(u8, try boundary.data.program_image.encodedLength(f.compiled.program));
+    var statistics: kronos.Statistics = .{};
+    const invocation_image_3 = try a.alloc(u8, try horos.data.program_image.encodedLength(f.compiled.program));
     defer a.free(invocation_image_3);
-    _ = try boundary.data.program_image.encode(a, f.compiled.program, invocation_image_3);
+    _ = try horos.data.program_image.encode(a, f.compiled.program, invocation_image_3);
     var outcome = observed: {
-        const instance: boundary.data.invocation.Instance = .{ .initial_args = args };
+        const instance: horos.data.invocation.Instance = .{ .initial_args = args };
         var session = switch (instance) {
-            .initial_args => |initial| try world.Session.initImage(a, invocation_image_3, initial),
-            .state => |state| try world.Session.restoreImage(a, invocation_image_3, state),
+            .initial_args => |initial| try kronos.Session.initImage(a, invocation_image_3, initial),
+            .state => |state| try kronos.Session.restoreImage(a, invocation_image_3, state),
         };
         defer session.deinit();
         session.statistics = &statistics;
         session.store.statistics = &statistics.storage;
-        _ = try world.invocation.advance(&session, .none, null);
-        break :observed try world.invocation.finish(a, &session, true);
+        _ = try kronos.invocation.advance(&session, .none, null);
+        break :observed try kronos.invocation.finish(a, &session, true);
     };
     defer outcome.deinit();
     var calls: usize = 0;
@@ -583,15 +583,15 @@ fn growingDomain(count: usize) !void {
         calls += 1;
         try std.testing.expect(calls <= count);
         peak = @max(peak, outcome.record.requested.state.?.len);
-        var decoded_request_2 = try boundary.data.invocation.decode(
-            boundary.data.invocation.Request,
+        var decoded_request_2 = try horos.data.invocation.decode(
+            horos.data.invocation.Request,
             a,
             outcome.record.requested.request,
         );
         defer decoded_request_2.deinit();
         const request = decoded_request_2.value;
-        try std.testing.expectEqualStrings(agent.model_invocation.semantic_identity, request.binding.semantic_identity);
-        var context = try agent.contracts.decodeOwned(P.Request, a, request.binding.payload);
+        try std.testing.expectEqualStrings(protean.model_invocation.semantic_identity, request.binding.semantic_identity);
+        var context = try protean.contracts.decodeOwned(P.Request, a, request.binding.payload);
         defer context.deinit();
         try std.testing.expectEqualStrings("99", context.value.messages.items[0].content.bytes);
         try std.testing.expectEqualStrings("11", context.value.messages.items[2].content.bytes);
@@ -604,7 +604,7 @@ fn growingDomain(count: usize) !void {
     try std.testing.expectEqual(count, calls);
     try std.testing.expectEqual(@as(u64, 1), statistics.multi_templates);
     try std.testing.expectEqual(count, statistics.branch_activations);
-    var result = try agent.contracts.decodeOwned(Resolution, a, outcome.record.completed);
+    var result = try protean.contracts.decodeOwned(Resolution, a, outcome.record.completed);
     defer result.deinit();
     try std.testing.expect(result.value == .common);
     try std.testing.expectEqualSlices(u64, ids, result.value.common.members);

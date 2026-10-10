@@ -1,18 +1,18 @@
 //! Budget order and bounded history are ordinary authored policy, not host state.
 const std = @import("std");
-const agent = @import("agent");
-const boundary = @import("boundary");
-const world = @import("world");
-const Id = boundary.source.Id;
-const History = agent.contracts.Vector(u64, 2);
+const protean = @import("protean");
+const horos = @import("horos");
+const kronos = @import("kronos");
+const Id = horos.source.Id;
+const History = protean.contracts.Vector(u64, 2);
 const Input = struct { turns: u8, effects: u8, drop_oldest: bool };
 const Choice = union(enum) { observe: u64, finish: void };
 const Failure = enum { turn_budget, effect_budget, history_overflow };
 const Pair = struct { head: u64, rest: History };
-const System = agent.system(.{ .InitialArgs = Input, .Result = History, .Failure = Failure, .application = Application });
+const System = protean.system(.{ .InitialArgs = Input, .Result = History, .Failure = Failure, .application = Application });
 
 const Application = struct {
-    pub fn emit(c: agent.Context) !boundary.source.Module {
+    pub fn emit(c: protean.Context) !horos.source.Module {
         const b = c.builder;
         const decide = try c.external("history.decide", try c.schema(History), try c.schema(Choice), .read);
         const observe = try c.external("history.observe", try c.schema(u64), try c.schema(u64), .read);
@@ -56,7 +56,7 @@ const Application = struct {
     }
 };
 
-fn makeRoom(c: agent.Context, history: Id, drop: Id) !Id {
+fn makeRoom(c: protean.Context, history: Id, drop: Id) !Id {
     const b = c.builder;
     const length = try b.primitive(try c.schema(u64), .sequence_length, &.{history}, 0);
     const empty = try b.variable(try c.schema(void));
@@ -68,63 +68,63 @@ fn makeRoom(c: agent.Context, history: Id, drop: Id) !Id {
     const full = try b.term(.{ .conditional = .{ .condition = drop, .when_true = removed, .when_false = try fail(c, .history_overflow) } });
     return b.term(.{ .conditional = .{ .condition = try less(c, length, try c.literal(u64, 2)), .when_true = try b.pure(history), .when_false = full } });
 }
-fn field(c: agent.Context, comptime T: type, value: Id, index: u64) !Id {
+fn field(c: protean.Context, comptime T: type, value: Id, index: u64) !Id {
     return c.builder.primitive(try c.schema(T), .field, &.{value}, index);
 }
-fn less(c: agent.Context, a: Id, z: Id) !Id {
+fn less(c: protean.Context, a: Id, z: Id) !Id {
     return c.builder.primitive(try c.schema(bool), .less, &.{ a, z }, 0);
 }
-fn subtract(c: agent.Context, value: Id, failure: Failure) !Id {
+fn subtract(c: protean.Context, value: Id, failure: Failure) !Id {
     return c.builder.value(.{ .schema = try c.schema(u8), .expression = .{ .primitive = .{
         .opcode = .integer_sub,
         .operands = &.{ value, try c.literal(u8, 1) },
         .failures = &.{.{ .kind = .arithmetic_overflow, .value = try c.builder.failureLiteral(try c.literal(Failure, failure)) }},
     } } });
 }
-fn fail(c: agent.Context, value: Failure) !Id {
+fn fail(c: protean.Context, value: Failure) !Id {
     return c.builder.term(.{ .fail = try c.literal(Failure, value) });
 }
 
 const Driver = struct {
     image: []u8,
-    outcome: world.invocation.Outcome,
+    outcome: kronos.invocation.Outcome,
     fn init(input: Input) !Driver {
         const a = std.testing.allocator;
-        var compiled = try agent.compile(a, System);
+        var compiled = try protean.compile(a, System);
         defer compiled.deinit();
-        const image = try a.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
+        const image = try a.alloc(u8, try horos.data.program_image.encodedLength(compiled.program));
         errdefer a.free(image);
         _ = try compiled.encode(a, image);
-        const args = try agent.contracts.encodeOwned(Input, a, input);
+        const args = try protean.contracts.encodeOwned(Input, a, input);
         defer a.free(args);
-        return .{ .image = image, .outcome = try world.invocation.invoke(a, .{ .image = image, .instance = .{ .initial_args = args } }) };
+        return .{ .image = image, .outcome = try kronos.invocation.invoke(a, .{ .image = image, .instance = .{ .initial_args = args } }) };
     }
     fn deinit(d: *Driver) void {
         d.outcome.deinit();
         std.testing.allocator.free(d.image);
     }
-    fn request(d: *Driver, comptime T: type, name: []const u8) !agent.contracts.Decoded(T) {
+    fn request(d: *Driver, comptime T: type, name: []const u8) !protean.contracts.Decoded(T) {
         try std.testing.expect(d.outcome.record == .requested);
-        var r = try boundary.data.invocation.decode(boundary.data.invocation.Request, std.testing.allocator, d.outcome.record.requested.request);
+        var r = try horos.data.invocation.decode(horos.data.invocation.Request, std.testing.allocator, d.outcome.record.requested.request);
         defer r.deinit();
         try std.testing.expectEqualStrings(name, r.value.binding.semantic_identity);
-        return agent.contracts.decodeOwned(T, std.testing.allocator, r.value.binding.payload);
+        return protean.contracts.decodeOwned(T, std.testing.allocator, r.value.binding.payload);
     }
     fn reply(d: *Driver, comptime T: type, value: T) !void {
         const a = std.testing.allocator;
-        var r = try boundary.data.invocation.decode(boundary.data.invocation.Request, a, d.outcome.record.requested.request);
+        var r = try horos.data.invocation.decode(horos.data.invocation.Request, a, d.outcome.record.requested.request);
         defer r.deinit();
-        const bytes = try agent.contracts.encodeOwned(T, a, value);
+        const bytes = try protean.contracts.encodeOwned(T, a, value);
         defer a.free(bytes);
-        const reply_bytes = try boundary.data.invocation.encodeOwned(boundary.data.invocation.Result, a, .{ .request_identity = r.value.request_identity, .value = bytes });
+        const reply_bytes = try horos.data.invocation.encodeOwned(horos.data.invocation.Result, a, .{ .request_identity = r.value.request_identity, .value = bytes });
         defer a.free(reply_bytes);
-        const next = try world.invocation.invoke(a, .{ .image = d.image, .instance = .{ .state = d.outcome.record.requested.state.? }, .control = .{ .reply = reply_bytes } });
+        const next = try kronos.invocation.invoke(a, .{ .image = d.image, .instance = .{ .state = d.outcome.record.requested.state.? }, .control = .{ .reply = reply_bytes } });
         d.outcome.deinit();
         d.outcome = next;
     }
     fn failure(d: *Driver, expected: Failure) !void {
         try std.testing.expect(d.outcome.record == .failed);
-        var value = try agent.contracts.decodeOwned(Failure, std.testing.allocator, d.outcome.record.failed.value);
+        var value = try protean.contracts.decodeOwned(Failure, std.testing.allocator, d.outcome.record.failed.value);
         defer value.deinit();
         try std.testing.expectEqual(expected, value.value);
     }
@@ -176,7 +176,7 @@ test "drop-oldest retains exactly the newest two observations across 32 fresh re
     }
     try d.reply(Choice, .{ .finish = {} });
     try std.testing.expect(d.outcome.record == .completed);
-    var result = try agent.contracts.decodeOwned(History, std.testing.allocator, d.outcome.record.completed);
+    var result = try protean.contracts.decodeOwned(History, std.testing.allocator, d.outcome.record.completed);
     defer result.deinit();
     try std.testing.expectEqualSlices(u64, &.{ 30, 31 }, result.value.items);
 }

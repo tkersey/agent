@@ -1,8 +1,8 @@
 const std = @import("std");
-const bnd = @import("boundary");
-const agent = @import("agent");
-const admission = agent.admission;
-const callable = agent.callable;
+const bnd = @import("horos");
+const protean = @import("protean");
+const admission = protean.admission;
+const callable = protean.callable;
 const Id = bnd.source.Id;
 const B = bnd.source.Builder;
 

@@ -8,7 +8,7 @@ const hex = bytes => Buffer.from(bytes).toString('hex');
 const bytes = text => Uint8Array.from(Buffer.from(text, 'hex'));
 function rejects(code, callback) { assert.throws(callback, error => error instanceof ValueCodecError && error.code === code); }
 
-test('primitive values use canonical Boundary bytes, exact integers, and detached data', () => {
+test('primitive values use canonical Horos bytes, exact integers, and detached data', () => {
   const vectors = [
     ['unit', null, ''], ['boolean', true, '01'], ['boolean', false, '00'],
     ['i8', -128, '80'], ['i16', -32768, '0080'], ['i32', -2147483648, '00000080'],
@@ -161,7 +161,7 @@ test('schema bounds retain u64 precision, including equivalent declared bounds',
   assert.deepEqual(encodeSchema(decoded), encodeSchema(descriptor));
 });
 
-test('pure JS codecs match independent Zig/public Boundary schema and value bytes', () => {
+test('pure JS codecs match independent Zig/public Horos schema and value bytes', () => {
   const { envelope } = JSON.parse(readFileSync(new URL('./values-vectors.json', import.meta.url), 'utf8'));
   const schemaBytes = Uint8Array.from(envelope.schemaBytes), valueBytes = Uint8Array.from(envelope.valueBytes);
   const descriptor = decodeSchema(schemaBytes);

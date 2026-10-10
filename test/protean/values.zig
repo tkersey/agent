@@ -1,6 +1,6 @@
 const std = @import("std");
-const boundary = @import("boundary");
-const data = @import("boundary_data");
+const horos = @import("horos");
+const data = @import("horos_data");
 const contracts = @import("contracts");
 const a = std.testing.allocator;
 
@@ -32,8 +32,8 @@ const expected = [_]u8{
     0,  255,
 };
 
-test "descriptor derivation and value bytes agree with public Boundary admission" {
-    var builder = boundary.source.Builder.init(a);
+test "descriptor derivation and value bytes agree with public Horos admission" {
+    var builder = horos.source.Builder.init(a);
     defer builder.deinit();
     const root = try contracts.schema(Envelope, &builder);
     const bytes = try contracts.encodeOwned(Envelope, a, envelope);
@@ -97,7 +97,7 @@ test "tagged unions use ordinal tags while enums retain their explicit tags" {
     var decoded = try contracts.decodeOwned(T, a, bytes);
     defer decoded.deinit();
     try std.testing.expectEqual(std.math.maxInt(u64), decoded.value.number);
-    var builder = boundary.source.Builder.init(a);
+    var builder = horos.source.Builder.init(a);
     defer builder.deinit();
     const root = try contracts.schema(T, &builder);
     try data.schema.validateValue(a, .{ .root = root, .types = builder.schemas.items }, bytes);
@@ -118,7 +118,7 @@ test "sparse union tag values do not replace declaration ordinals on the wire" {
     defer decoded.deinit();
     try std.testing.expectEqual(Tag.later, std.meta.activeTag(decoded.value));
     try std.testing.expectEqual(@as(u8, 42), decoded.value.later);
-    var builder = boundary.source.Builder.init(a);
+    var builder = horos.source.Builder.init(a);
     defer builder.deinit();
     const root = try contracts.schema(Choice, &builder);
     try data.schema.validateValue(a, .{ .root = root, .types = builder.schemas.items }, first);
@@ -182,20 +182,20 @@ test "failed decode frees owned allocations" {
 }
 
 fn agree(descriptor: data.schema.Descriptor, bytes: []const u8) !void {
-    const boundary_accepts = if (data.schema.validateValue(a, descriptor, bytes))
+    const horos_accepts = if (data.schema.validateValue(a, descriptor, bytes))
         true
     else |_|
         false;
-    const agent_accepts = if (contracts.decodeOwned(Envelope, a, bytes)) |parsed| blk: {
+    const protean_accepts = if (contracts.decodeOwned(Envelope, a, bytes)) |parsed| blk: {
         var owned = parsed;
         defer owned.deinit();
         break :blk true;
     } else |_| false;
-    try std.testing.expectEqual(boundary_accepts, agent_accepts);
+    try std.testing.expectEqual(horos_accepts, protean_accepts);
 }
 
-test "every byte mutation and truncation agrees with public Boundary value admission" {
-    var builder = boundary.source.Builder.init(a);
+test "every byte mutation and truncation agrees with public Horos value admission" {
+    var builder = horos.source.Builder.init(a);
     defer builder.deinit();
     const root = try contracts.schema(Envelope, &builder);
     const descriptor: data.schema.Descriptor = .{ .root = root, .types = builder.schemas.items };

@@ -1,9 +1,9 @@
 const std = @import("std");
-const boundary = @import("boundary");
-const agent = @import("agent");
-const world = @import("world");
-const source = boundary.source;
-const data = boundary.data;
+const horos = @import("horos");
+const protean = @import("protean");
+const kronos = @import("kronos");
+const source = horos.source;
+const data = horos.data;
 const Id = source.Id;
 
 const Responder = enum { rule, human, model };
@@ -20,12 +20,12 @@ fn add(b: *source.Builder, left: Id, right: Id) !Id {
 }
 
 // The same decision-using body is used without a responder-dependent branch.
-fn decisionBody(b: *source.Builder, family: agent.decision.Family) !Id {
+fn decisionBody(b: *source.Builder, family: protean.decision.Family) !Id {
     const number = try b.scalar(u64);
     const body = try b.declare(&.{family.capability}, number, &.{family.effect}, &.{});
     const answer = try b.variable(number);
     const local = try b.variable(number);
-    const asked = try agent.decision.ask(b, family, try b.reference(b.parameter(body, 0)), try b.constant(u64, 8));
+    const asked = try protean.decision.ask(b, family, try b.reference(b.parameter(body, 0)), try b.constant(u64, 8));
     const completed = try b.pure(try add(b, try b.reference(local), try b.reference(answer)));
     try b.define(body, try b.bind(local, try b.pure(try b.constant(u64, 100)), try b.bind(answer, asked, completed)));
     const computation = try b.schema(.{ .internal = .{ .computation = .{
@@ -40,7 +40,7 @@ fn decisionBody(b: *source.Builder, family: agent.decision.Family) !Id {
 fn decisionModule(b: *source.Builder, responder: Responder) !source.Module {
     const number = try b.scalar(u64);
     const unit = try b.scalar(void);
-    const family = try agent.decision.define(b, "consumer.question", number, number);
+    const family = try protean.decision.define(b, "consumer.question", number, number);
     const external = if (responder != .rule) try b.effect(.{
         .identity = if (responder == .human) "consumer.human" else "consumer.model",
         .payload = number,
@@ -58,12 +58,12 @@ fn decisionModule(b: *source.Builder, responder: Responder) !source.Module {
         .result = number,
         .effects = residual,
     } } });
-    const interpretation = try agent.decision.interpret(b, family, number, responder_schema, .{
+    const interpretation = try protean.decision.interpret(b, family, number, responder_schema, .{
         .captures = &.{number},
         .residual = .{ .effects = residual },
     });
     const entry = try b.declare(&.{}, number, residual, &.{});
-    try b.define(entry, try agent.decision.handle(b, interpretation, try decisionBody(b, family), try b.lambda(respond, responder_schema), &.{}));
+    try b.define(entry, try protean.decision.handle(b, interpretation, try decisionBody(b, family), try b.lambda(respond, responder_schema), &.{}));
     return b.module(entry, unit);
 }
 
@@ -84,12 +84,12 @@ fn replyBytes(a: std.mem.Allocator, request_bytes: []const u8, value: []const u8
 
 fn execute(module: source.Module, prescribed: []const u8, expected: []const u8) !usize {
     const a = std.testing.allocator;
-    var compiled = try boundary.program.compile(a, module);
+    var compiled = try horos.program.compile(a, module);
     defer compiled.deinit();
-    const invocation_image_0 = try a.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
+    const invocation_image_0 = try a.alloc(u8, try horos.data.program_image.encodedLength(compiled.program));
     defer a.free(invocation_image_0);
-    _ = try boundary.data.program_image.encode(a, compiled.program, invocation_image_0);
-    var outcome = try world.invocation.invoke(a, .{
+    _ = try horos.data.program_image.encode(a, compiled.program, invocation_image_0);
+    var outcome = try kronos.invocation.invoke(a, .{
         .image = invocation_image_0,
         .instance = .{ .initial_args = &.{} },
     });
@@ -100,10 +100,10 @@ fn execute(module: source.Module, prescribed: []const u8, expected: []const u8) 
         try std.testing.expect(requests <= 3); // finite test expectation, never a library budget
         const reply = try replyBytes(a, outcome.record.requested.request, prescribed);
         defer a.free(reply);
-        const invocation_image_1 = try a.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
+        const invocation_image_1 = try a.alloc(u8, try horos.data.program_image.encodedLength(compiled.program));
         defer a.free(invocation_image_1);
-        _ = try boundary.data.program_image.encode(a, compiled.program, invocation_image_1);
-        var next = try world.invocation.invoke(a, .{
+        _ = try horos.data.program_image.encode(a, compiled.program, invocation_image_1);
+        var next = try kronos.invocation.invoke(a, .{
             .image = invocation_image_1,
             .instance = .{ .state = outcome.record.requested.state.? },
             .control = .{ .reply = reply },
@@ -130,24 +130,24 @@ test "Ask rejects incompatible and linear responder schemas and duplicate meanin
     var b = source.Builder.init(std.testing.allocator);
     defer b.deinit();
     const number = try b.scalar(u64);
-    const family = try agent.decision.define(&b, "question", number, number);
-    const same = try agent.decision.define(&b, "question", number, number);
+    const family = try protean.decision.define(&b, "question", number, number);
+    const same = try protean.decision.define(&b, "question", number, number);
     try std.testing.expectEqual(family.effect, same.effect);
-    try std.testing.expectError(error.InvalidSource, agent.decision.define(&b, "question", number, try b.scalar(bool)));
+    try std.testing.expectError(error.InvalidSource, protean.decision.define(&b, "question", number, try b.scalar(bool)));
     const linear = try b.schema(.{ .internal = .{ .computation = .{
         .parameters = &.{number},
         .result = number,
         .use = .linear,
     } } });
-    try std.testing.expectError(error.InvalidOwnership, agent.decision.interpret(&b, family, number, linear, .{}));
-    try std.testing.expectError(error.TypeMismatch, agent.decision.interpret(&b, family, number, number, .{}));
+    try std.testing.expectError(error.InvalidOwnership, protean.decision.interpret(&b, family, number, linear, .{}));
+    try std.testing.expectError(error.TypeMismatch, protean.decision.interpret(&b, family, number, number, .{}));
 }
 
 test "Ask interpretation preserves captures regions cleanup and pure return" {
     var b = source.Builder.init(std.testing.allocator);
     defer b.deinit();
     const number = try b.scalar(u64);
-    const family = try agent.decision.define(&b, "question.metadata", number, number);
+    const family = try protean.decision.define(&b, "question.metadata", number, number);
     const external = try b.effect(.{ .identity = "question.responder", .payload = number, .result = number });
     const responder = try b.schema(.{ .internal = .{ .computation = .{
         .parameters = &.{number},
@@ -155,7 +155,7 @@ test "Ask interpretation preserves captures regions cleanup and pure return" {
         .effects = &.{external},
     } } });
     const region = b.region();
-    const interpretation = try agent.decision.interpret(&b, family, number, responder, .{
+    const interpretation = try protean.decision.interpret(&b, family, number, responder, .{
         .captures = &.{number},
         .residual = .{ .effects = &.{external} },
         .owned_regions = &.{region},
@@ -178,15 +178,15 @@ test "Ask interpretation preserves captures regions cleanup and pure return" {
 test "portable descriptor intersection covers 31 32 63 and rejects unavailable indexes" {
     var b = source.Builder.init(std.testing.allocator);
     defer b.deinit();
-    const set = try agent.sets.define(&b, 64);
+    const set = try protean.sets.define(&b, 64);
     var outer = @as([64]bool, @splat(false));
     outer[31] = true;
     outer[32] = true;
     outer[63] = true;
     var restriction = @as([64]bool, @splat(true));
     restriction[32] = false;
-    const outer_value = try agent.sets.literal(&b, set, &outer);
-    try std.testing.expectError(error.InvalidReference, agent.sets.member(&b, set, outer_value, 64));
+    const outer_value = try protean.sets.literal(&b, set, &outer);
+    try std.testing.expectError(error.InvalidReference, protean.sets.member(&b, set, outer_value, 64));
     const intersection = try b.variable(set.schema);
     const results = try b.schema(.{ .array = .{ .element = try b.scalar(bool), .length = 4 } });
     var answers: [4]Id = undefined;
@@ -200,14 +200,14 @@ test "portable descriptor intersection covers 31 32 63 and rejects unavailable i
     var index: usize = indexes.len;
     while (index != 0) {
         index -= 1;
-        body = try b.bind(answers[index], try agent.sets.contains(&b, set, try b.reference(intersection), try b.constant(u64, indexes[index])), body);
+        body = try b.bind(answers[index], try protean.sets.contains(&b, set, try b.reference(intersection), try b.constant(u64, indexes[index])), body);
     }
     const entry = try b.declare(&.{}, results, &.{}, &.{});
-    try b.define(entry, try b.bind(intersection, try agent.sets.intersection(&b, set, outer_value, try agent.sets.literal(&b, set, &restriction)), body));
+    try b.define(entry, try b.bind(intersection, try protean.sets.intersection(&b, set, outer_value, try protean.sets.literal(&b, set, &restriction)), body));
     _ = try execute(b.module(entry, try b.scalar(void)), &.{}, &.{ 1, 0, 1, 0 });
 }
 
-fn scopeBodySchema(b: *source.Builder, reader: agent.scopes.Reader, residual: Id) !Id {
+fn scopeBodySchema(b: *source.Builder, reader: protean.scopes.Reader, residual: Id) !Id {
     const row = try (source.Row{ .effects = &.{residual} }).unionWith(b.allocator(), .{
         .effects = &.{reader.family.effect},
     });
@@ -226,7 +226,7 @@ test "reader interpretation retains captures regions cleanup and pure return" {
     const captured = try b.scalar(bool);
     const external = try b.effect(.{ .identity = "reader.residual", .payload = environment, .result = environment });
     const region = b.region();
-    const reader = try agent.scopes.define(&b, "reader.metadata", environment, environment, .{
+    const reader = try protean.scopes.define(&b, "reader.metadata", environment, environment, .{
         .captures = &.{captured},
         .residual = .{ .effects = &.{external} },
         .owned_regions = &.{region},
@@ -256,7 +256,7 @@ test "nested lexical environments survive residual suspension and restore outer 
         .payload = number,
         .result = number,
     });
-    const reader = try agent.scopes.define(&b, "consumer.scope", number, number, .{
+    const reader = try protean.scopes.define(&b, "consumer.scope", number, number, .{
         .captures = &.{number},
         .residual = .{ .effects = &.{external} },
     });
@@ -265,7 +265,7 @@ test "nested lexical environments survive residual suspension and restore outer 
     const inside = try b.declare(&.{reader.family.capability}, number, effects, &.{});
     const retained = try b.variable(number);
     const ignored = try b.variable(number);
-    try b.define(inside, try b.bind(retained, try agent.scopes.read(&b, reader, try b.reference(b.parameter(inside, 0))), try b.bind(ignored, try b.term(.{ .perform = .{
+    try b.define(inside, try b.bind(retained, try protean.scopes.read(&b, reader, try b.reference(b.parameter(inside, 0))), try b.bind(ignored, try b.term(.{ .perform = .{
         .effect = external,
         .payload = try b.reference(retained),
     } }), try b.pure(try b.reference(retained)))));
@@ -275,14 +275,14 @@ test "nested lexical environments survive residual suspension and restore outer 
     const after = try b.variable(number);
     const cap = try b.reference(b.parameter(outer, 0));
     const result = try b.pure(try add(&b, try add(&b, try b.reference(before), try b.reference(inner)), try b.reference(after)));
-    try b.define(outer, try b.bind(before, try agent.scopes.read(&b, reader, cap), try b.bind(inner, try agent.scopes.enter(&b, reader, try b.lambda(inside, computation), try b.constant(u64, 7), &.{}), try b.bind(after, try agent.scopes.read(&b, reader, cap), result))));
+    try b.define(outer, try b.bind(before, try protean.scopes.read(&b, reader, cap), try b.bind(inner, try protean.scopes.enter(&b, reader, try b.lambda(inside, computation), try b.constant(u64, 7), &.{}), try b.bind(after, try protean.scopes.read(&b, reader, cap), result))));
     const entry = try b.declare(&.{}, number, &.{external}, &.{});
-    try b.define(entry, try agent.scopes.enter(&b, reader, try b.lambda(outer, computation), try b.constant(u64, 2), &.{}));
+    try b.define(entry, try protean.scopes.enter(&b, reader, try b.lambda(outer, computation), try b.constant(u64, 2), &.{}));
     const requests = try execute(b.module(entry, try b.scalar(void)), &.{ 42, 0, 0, 0, 0, 0, 0, 0 }, &.{ 11, 0, 0, 0, 0, 0, 0, 0 });
     try std.testing.expectEqual(@as(usize, 1), requests);
 }
 
-fn instructions(b: *source.Builder, shape: agent.scopes.Layout, n: u64) !Id {
+fn instructions(b: *source.Builder, shape: protean.scopes.Layout, n: u64) !Id {
     return b.primitive(shape.instructions, .sequence, &.{try b.constant(u64, n)}, 0);
 }
 
@@ -290,35 +290,35 @@ test "scope contributions preserve lexical instructions memory and permission in
     var b = source.Builder.init(std.testing.allocator);
     defer b.deinit();
     const number = try b.scalar(u64);
-    const shape = try agent.scopes.layout(&b, number, number, 2, 64, 64);
+    const shape = try protean.scopes.layout(&b, number, number, 2, 64, 64);
     var tools = @as([64]bool, @splat(false));
     tools[31] = true;
     tools[32] = true;
     var skills = @as([64]bool, @splat(false));
     skills[31] = true;
     skills[63] = true;
-    const initial = try agent.scopes.value(&b, shape, .{
+    const initial = try protean.scopes.value(&b, shape, .{
         .model = try b.constant(u64, 0),
         .instructions = try instructions(&b, shape, 1),
-        .models = try agent.sets.filled(&b, shape.models, true),
-        .tools = try agent.sets.literal(&b, shape.tools, &tools),
-        .skills = try agent.sets.literal(&b, shape.skills, &skills),
+        .models = try protean.sets.filled(&b, shape.models, true),
+        .tools = try protean.sets.literal(&b, shape.tools, &tools),
+        .skills = try protean.sets.literal(&b, shape.skills, &skills),
         .memory = try b.constant(u64, 11),
     });
     tools[32] = false;
     skills[31] = false;
     const first = try b.variable(shape.schema);
-    const first_term = try agent.scopes.narrow(&b, shape, initial, .{
+    const first_term = try protean.scopes.narrow(&b, shape, initial, .{
         .instructions = try instructions(&b, shape, 2),
-        .models = try agent.sets.filled(&b, shape.models, true),
-        .tools = try agent.sets.literal(&b, shape.tools, &tools),
-        .skills = try agent.sets.literal(&b, shape.skills, &skills),
+        .models = try protean.sets.filled(&b, shape.models, true),
+        .tools = try protean.sets.literal(&b, shape.tools, &tools),
+        .skills = try protean.sets.literal(&b, shape.skills, &skills),
     });
-    const second = try agent.scopes.narrow(&b, shape, try b.reference(first), .{
+    const second = try protean.scopes.narrow(&b, shape, try b.reference(first), .{
         .instructions = try instructions(&b, shape, 3),
-        .models = try agent.sets.literal(&b, shape.models, &.{ true, false }),
-        .tools = try agent.sets.filled(&b, shape.tools, true),
-        .skills = try agent.sets.filled(&b, shape.skills, true),
+        .models = try protean.sets.literal(&b, shape.models, &.{ true, false }),
+        .tools = try protean.sets.filled(&b, shape.tools, true),
+        .skills = try protean.sets.filled(&b, shape.skills, true),
     });
     const entry = try b.declare(&.{}, shape.schema, &.{}, &.{});
     try b.define(entry, try b.bind(first, first_term, second));
@@ -338,17 +338,17 @@ test "a disallowed model override is a declared denied answer" {
     var b = source.Builder.init(std.testing.allocator);
     defer b.deinit();
     const number = try b.scalar(u64);
-    const shape = try agent.scopes.layout(&b, number, number, 2, 0, 0);
-    const initial = try agent.scopes.value(&b, shape, .{
+    const shape = try protean.scopes.layout(&b, number, number, 2, 0, 0);
+    const initial = try protean.scopes.value(&b, shape, .{
         .model = try b.constant(u64, 0),
         .instructions = try instructions(&b, shape, 1),
-        .models = try agent.sets.literal(&b, shape.models, &.{ true, false }),
-        .tools = try agent.sets.filled(&b, shape.tools, false),
-        .skills = try agent.sets.filled(&b, shape.skills, false),
+        .models = try protean.sets.literal(&b, shape.models, &.{ true, false }),
+        .tools = try protean.sets.filled(&b, shape.tools, false),
+        .skills = try protean.sets.filled(&b, shape.skills, false),
         .memory = try b.constant(u64, 11),
     });
     const entry = try b.declare(&.{}, shape.override_result, &.{}, &.{});
-    try b.define(entry, try agent.scopes.overrideModel(&b, shape, initial, 1));
+    try b.define(entry, try protean.scopes.overrideModel(&b, shape, initial, 1));
     _ = try execute(b.module(entry, try b.scalar(void)), &.{}, &.{ 1, 1, 0, 0, 0, 0, 0, 0, 0 });
 }
 
@@ -356,17 +356,17 @@ test "a permitted model override selects the inner profile and preserves scope d
     var b = source.Builder.init(std.testing.allocator);
     defer b.deinit();
     const number = try b.scalar(u64);
-    const shape = try agent.scopes.layout(&b, number, number, 2, 0, 0);
-    const initial = try agent.scopes.value(&b, shape, .{
+    const shape = try protean.scopes.layout(&b, number, number, 2, 0, 0);
+    const initial = try protean.scopes.value(&b, shape, .{
         .model = try b.constant(u64, 0),
         .instructions = try instructions(&b, shape, 1),
-        .models = try agent.sets.filled(&b, shape.models, true),
-        .tools = try agent.sets.filled(&b, shape.tools, false),
-        .skills = try agent.sets.filled(&b, shape.skills, false),
+        .models = try protean.sets.filled(&b, shape.models, true),
+        .tools = try protean.sets.filled(&b, shape.tools, false),
+        .skills = try protean.sets.filled(&b, shape.skills, false),
         .memory = try b.constant(u64, 11),
     });
     const entry = try b.declare(&.{}, shape.override_result, &.{}, &.{});
-    try b.define(entry, try agent.scopes.overrideModel(&b, shape, initial, 1));
+    try b.define(entry, try protean.scopes.overrideModel(&b, shape, initial, 1));
     var expected: [28]u8 = @splat(0);
     expected[1] = 1; // retained selected model
     expected[9] = 1; // instruction count
@@ -381,16 +381,16 @@ test "scope and set helper declarations are shared across repeated installations
     var b = source.Builder.init(std.testing.allocator);
     defer b.deinit();
     const number = try b.scalar(u64);
-    const reader = try agent.scopes.define(&b, "scope.shared", number, number, .{});
-    const set = try agent.sets.define(&b, 64);
-    const all = try agent.sets.filled(&b, set, true);
-    _ = try agent.sets.intersection(&b, set, all, all);
+    const reader = try protean.scopes.define(&b, "scope.shared", number, number, .{});
+    const set = try protean.sets.define(&b, 64);
+    const all = try protean.sets.filled(&b, set, true);
+    _ = try protean.sets.intersection(&b, set, all, all);
     const functions = b.functions.items.len;
     const handlers = b.handlers.items.len;
     for (0..64) |_| {
-        const shared = try agent.scopes.define(&b, "scope.shared", number, number, .{});
+        const shared = try protean.scopes.define(&b, "scope.shared", number, number, .{});
         try std.testing.expectEqual(reader.handler, shared.handler);
-        _ = try agent.sets.intersection(&b, set, all, all);
+        _ = try protean.sets.intersection(&b, set, all, all);
         try std.testing.expectEqual(functions, b.functions.items.len);
         try std.testing.expectEqual(handlers, b.handlers.items.len);
     }
@@ -399,17 +399,17 @@ test "scope and set helper declarations are shared across repeated installations
 test "descriptor values cannot substitute a larger catalog and responder rows cannot hide effects" {
     var b = source.Builder.init(std.testing.allocator);
     defer b.deinit();
-    const small = try agent.sets.define(&b, 32);
-    const large = try agent.sets.define(&b, 64);
-    const all = try agent.sets.filled(&b, large, true);
-    try std.testing.expectError(error.TypeMismatch, agent.sets.contains(&b, small, all, try b.constant(u64, 63)));
+    const small = try protean.sets.define(&b, 32);
+    const large = try protean.sets.define(&b, 64);
+    const all = try protean.sets.filled(&b, large, true);
+    try std.testing.expectError(error.TypeMismatch, protean.sets.contains(&b, small, all, try b.constant(u64, 63)));
     const number = try b.scalar(u64);
-    const family = try agent.decision.define(&b, "question.row", number, number);
+    const family = try protean.decision.define(&b, "question.row", number, number);
     const effect = try b.effect(.{ .identity = "external.undeclared", .payload = number, .result = number });
     const responder = try b.schema(.{ .internal = .{ .computation = .{
         .parameters = &.{number},
         .result = number,
         .effects = &.{effect},
     } } });
-    try std.testing.expectError(error.InvalidEffect, agent.decision.interpret(&b, family, number, responder, .{}));
+    try std.testing.expectError(error.InvalidEffect, protean.decision.interpret(&b, family, number, responder, .{}));
 }

@@ -10,7 +10,7 @@ import {dirname, join} from 'node:path';
 const shell = value => `'${value.replaceAll("'", "'\\''")}'`;
 
 export function deployment(source, name) {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), 'Agent deployment ü ')));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'Protean deployment ü ')));
   const data = join(root, 'data'), controller = join(root, 'controller');
   mkdirSync(data, {mode: 0o700});
   mkdirSync(controller, {mode: 0o700});

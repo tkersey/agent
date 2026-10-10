@@ -1,7 +1,7 @@
 //! Construction and execution use ordinary captured worker occurrences.
 const std = @import("std");
-const native = @import("agent_native");
-const contracts = @import("agent_contracts");
+const native = @import("protean_native");
+const contracts = @import("protean_contracts");
 const t = @import("application_types");
 const work = @import("work.zig");
 const resources = @import("tool_resources.zig");

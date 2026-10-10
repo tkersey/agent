@@ -1,5 +1,5 @@
-const agent = @import("agent");
-const Unsupported = agent.model_invocation.Question([]const u8, "answer", "Answer.", .{
+const protean = @import("protean");
+const Unsupported = protean.model_invocation.Question([]const u8, "answer", "Answer.", .{
     .model_id_bytes = 32,
     .temperature_bytes = 8,
     .maximum_messages = 4,

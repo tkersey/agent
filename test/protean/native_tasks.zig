@@ -1,10 +1,10 @@
 const std = @import("std");
-const agent = @import("agent");
-const boundary = @import("boundary");
-const native = @import("agent_native");
-const world = @import("world");
-const protocol = boundary.data.invocation;
-const Inbox = agent.inbox.Profile(u32);
+const protean = @import("protean");
+const horos = @import("horos");
+const native = @import("protean_native");
+const kronos = @import("kronos");
+const protocol = horos.data.invocation;
+const Inbox = protean.inbox.Profile(u32);
 const T = struct {
     pub const application_id = "task-owner-test";
     pub const input_schema_id = "task-owner.input.v1";
@@ -12,7 +12,7 @@ const T = struct {
     pub const failure_schema_id = "task-owner.failure.v1";
     pub const message_schema_id = "task-owner.message.v1";
     pub const Input = u32;
-    pub const Padding = agent.contracts.Bytes(64 * 1024);
+    pub const Padding = protean.contracts.Bytes(64 * 1024);
     pub const Output = struct { answer: u32, inbox: Inbox.Reply, padding: Padding };
     pub const Failure = void;
     pub const Message = u32;
@@ -31,7 +31,7 @@ fn MessageContract(comptime application: []const u8, comptime message: []const u
     };
 }
 const Application = struct {
-    pub fn emit(c: agent.Context) !boundary.source.Module {
+    pub fn emit(c: protean.Context) !horos.source.Module {
         const b = c.builder;
         const number = try c.schema(u32);
         const output = try c.schema(T.Output);
@@ -73,7 +73,7 @@ fn present(ctx: native.Context, input: u32) !native.json.Value {
 }
 const CapturingIncrement = struct {
     fn prepare(ctx: native.registry.ProjectionContext, payload: []const u8) ![]u8 {
-        var value = try agent.contracts.decodeOwned(u32, ctx.allocator, payload);
+        var value = try protean.contracts.decodeOwned(u32, ctx.allocator, payload);
         defer value.deinit();
         return std.fmt.allocPrint(ctx.allocator, "increment:{d}", .{value.value});
     }
@@ -83,22 +83,22 @@ const CapturingIncrement = struct {
     }
     fn interpret(ctx: native.registry.ProjectionContext, payload: []const u8, rendered: []const u8, raw: []const u8) !native.registry.Projection {
         if (!std.mem.eql(u8, rendered, "increment:20") or !std.mem.eql(u8, raw, "raw-response:21")) return error.InvalidCapture;
-        var value = try agent.contracts.decodeOwned(u32, ctx.allocator, payload);
+        var value = try protean.contracts.decodeOwned(u32, ctx.allocator, payload);
         defer value.deinit();
         if (value.value != 20) return error.InvalidCapture;
         const replay = try ctx.allocator.alloc(u8, 2 * 1024 * 1024);
         @memset(replay, 'R');
         const objects = try ctx.allocator.alloc([]const u8, 1);
         objects[0] = replay;
-        return .{ .reply = try agent.contracts.encodeOwned(u32, ctx.allocator, 21), .objects = objects };
+        return .{ .reply = try protean.contracts.encodeOwned(u32, ctx.allocator, 21), .objects = objects };
     }
 };
 
 test "durable owner replays admissions and acquired work, binds answers, and consumes queued input once" {
     const a = std.testing.allocator;
-    var compiled = try agent.compile(a, agent.system(.{ .InitialArgs = T.Input, .Result = T.Output, .Failure = T.Failure, .application = Application }));
+    var compiled = try protean.compile(a, protean.system(.{ .InitialArgs = T.Input, .Result = T.Output, .Failure = T.Failure, .application = Application }));
     defer compiled.deinit();
-    const image = try a.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
+    const image = try a.alloc(u8, try horos.data.program_image.encodedLength(compiled.program));
     defer a.free(image);
     _ = try compiled.encode(a, image);
     ownerRecovery(false, image) catch |err| {
@@ -128,7 +128,7 @@ pub fn ownerManifest(a: std.mem.Allocator, image: []const u8, identity: [32]u8, 
         .program_sha256 = @as([]const u8, &image_hex),
         .program_identity = @as([]const u8, &identity_hex),
         .application_assets_sha256 = @as([]const u8, &assets_hex),
-        .dependencies = .{ .world = "unit-world", .boundary = "unit-boundary" },
+        .dependencies = .{ .world = "unit-kronos", .boundary = "unit-horos" },
         .compiler = .{ .version = "0.17.0" },
     }, .{});
 }
@@ -141,7 +141,7 @@ fn omitArchiveFact(a: std.mem.Allocator, io: std.Io, shape: anytype, task: anyty
     const schema_length = std.mem.readInt(u32, bytes[8..12], .little);
     const manifest_length = std.mem.readInt(u32, bytes[12..16], .little);
     const start = 32 + schema_length;
-    const decoded = try agent.contracts.decodeOwned(@TypeOf(shape), a, bytes[start..][0..manifest_length]);
+    const decoded = try protean.contracts.decodeOwned(@TypeOf(shape), a, bytes[start..][0..manifest_length]);
     var archive = decoded.value;
     const Reference = @TypeOf(archive.task);
     const Blob = struct { reference: Reference, bytes: []const u8 };
@@ -161,7 +161,7 @@ fn omitArchiveFact(a: std.mem.Allocator, io: std.Io, shape: anytype, task: anyty
         const omitted = change == .cancellation_omitted or change == .terminal_cancellation_omitted;
         changed.cancellation = if (omitted) null else .{ .bytes = "unacknowledged replacement" };
         if (terminal and omitted) changed.cancellation_applied = false;
-        replacement = try agent.contracts.encodeOwned(@TypeOf(task), a, changed);
+        replacement = try protean.contracts.encodeOwned(@TypeOf(task), a, changed);
         target = &archive.task;
     } else {
         // This independent wire shape deliberately replaces a terminal event
@@ -171,7 +171,7 @@ fn omitArchiveFact(a: std.mem.Allocator, io: std.Io, shape: anytype, task: anyty
             seq: u64,
             revision: u64,
             kind: enum { accepted, input_required, input_accepted, message_queued, message_consumed, message_not_consumed, cancellation_requested, parked, resumed, blocked, delivery_unknown, completed, failed, cancelled, imported },
-            data: agent.contracts.Bytes(48 * 1024),
+            data: protean.contracts.Bytes(48 * 1024),
         };
         var found = false;
         const events = try a.dupe(@TypeOf(archive.events.items[0]), archive.events.items);
@@ -179,7 +179,7 @@ fn omitArchiveFact(a: std.mem.Allocator, io: std.Io, shape: anytype, task: anyty
         for (events) |*row| {
             for (blobs.items) |blob| {
                 if (!std.mem.eql(u8, &blob.reference.digest, &row.body.digest)) continue;
-                var event = (try agent.contracts.decodeOwned(Event, a, blob.bytes)).value;
+                var event = (try protean.contracts.decodeOwned(Event, a, blob.bytes)).value;
                 if (change == .message_not_consumed) {
                     if (event.kind != .message_not_consumed) break;
                 } else {
@@ -188,7 +188,7 @@ fn omitArchiveFact(a: std.mem.Allocator, io: std.Io, shape: anytype, task: anyty
                 }
                 event.kind = .blocked;
                 event.data.bytes = "{}";
-                replacement = try agent.contracts.encodeOwned(Event, a, event);
+                replacement = try protean.contracts.encodeOwned(Event, a, event);
                 target = &row.body;
                 found = true;
                 break;
@@ -219,7 +219,7 @@ fn omitArchiveFact(a: std.mem.Allocator, io: std.Io, shape: anytype, task: anyty
         try body.appendSlice(a, blob.bytes);
     }
     archive.objects.items = references;
-    const manifest = try agent.contracts.encodeOwned(@TypeOf(shape), a, archive);
+    const manifest = try protean.contracts.encodeOwned(@TypeOf(shape), a, archive);
     var header: [32]u8 = bytes[0..32].*;
     std.mem.writeInt(u32, header[12..16], @intCast(manifest.len), .little);
     std.mem.writeInt(u64, header[24..32], body.items.len, .little);
@@ -239,7 +239,7 @@ fn omitIncrementEvidence(a: std.mem.Allocator, io: std.Io, shape: anytype, sourc
     const schema_length = std.mem.readInt(u32, bytes[8..12], .little);
     const manifest_length = std.mem.readInt(u32, bytes[12..16], .little);
     const start = 32 + schema_length;
-    var decoded = try agent.contracts.decodeOwned(@TypeOf(shape), a, bytes[start..][0..manifest_length]);
+    var decoded = try protean.contracts.decodeOwned(@TypeOf(shape), a, bytes[start..][0..manifest_length]);
     defer decoded.deinit();
     var archive = decoded.value;
     var removed: std.ArrayList([32]u8) = .empty;
@@ -281,7 +281,7 @@ fn omitIncrementEvidence(a: std.mem.Allocator, io: std.Io, shape: anytype, sourc
         offset += length;
     }
     archive.objects.items = objects.items;
-    const manifest = try agent.contracts.encodeOwned(@TypeOf(shape), a, archive);
+    const manifest = try protean.contracts.encodeOwned(@TypeOf(shape), a, archive);
     var header: [32]u8 = bytes[0..32].*;
     std.mem.writeInt(u32, header[12..16], @intCast(manifest.len), .little);
     std.mem.writeInt(u32, header[16..20], @intCast(objects.items.len), .little);
@@ -378,7 +378,7 @@ fn rejectRequeuedHistory(a: std.mem.Allocator, service: *native.tasks.Service(T)
         occurrence: ?[32]u8,
     };
     const bytes = (try namespace.store.recordBytes(a, "message", message_id, value.id)).?;
-    var decoded = try agent.contracts.decodeOwned(Message, a, bytes);
+    var decoded = try protean.contracts.decodeOwned(Message, a, bytes);
     defer decoded.deinit();
     try std.testing.expectEqual(.consumed, decoded.value.disposition);
     decoded.value.disposition = .queued;
@@ -390,8 +390,8 @@ fn rejectRequeuedHistory(a: std.mem.Allocator, service: *native.tasks.Service(T)
     defer namespace.store.rollback();
     const original_message = try namespace.store.putObject(bytes);
     const original_task = try namespace.store.putObject(original_task_bytes);
-    const message = try namespace.store.putObject(try agent.contracts.encodeOwned(Message, a, decoded.value));
-    const task = try namespace.store.putObject(try agent.contracts.encodeOwned(@TypeOf(value), a, requeued));
+    const message = try namespace.store.putObject(try protean.contracts.encodeOwned(Message, a, decoded.value));
+    const task = try namespace.store.putObject(try protean.contracts.encodeOwned(@TypeOf(value), a, requeued));
     try namespace.store.database.run("UPDATE records SET body=? WHERE kind='message' AND id=?", &.{ .{ .blob = &message.digest }, .{ .blob = &message_id } });
     try namespace.store.database.run("UPDATE tasks SET body=? WHERE id=?", &.{ .{ .blob = &task.digest }, .{ .blob = &value.id } });
     // Export intentionally requires a settled transaction. Commit the synthetic
@@ -411,7 +411,7 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     errdefer std.debug.print("owner recovery phase: {s}\n", .{phase});
     const a = std.testing.allocator;
     const io = std.testing.io;
-    const admitted_image = try boundary.data.program_image.Admitted.decode(a, image);
+    const admitted_image = try horos.data.program_image.Admitted.decode(a, image);
     defer admitted_image.deinit();
     const manifest = try ownerManifest(a, image, admitted_image.identity(), "owner-unit-test");
     defer a.free(manifest);
@@ -501,7 +501,7 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     try std.testing.expectEqual(1, calls);
     try std.testing.expectEqual(@as(u32, if (captured) 2 else 1), try namespace.store.capabilityAttempts(accepted.receipt.task, "task-owner.increment.v1"));
     try std.testing.expectEqual(@as(u32, 0), try namespace.store.capabilityAttempts(accepted.receipt.task, "another-capability"));
-    // Restart at durable acquisition, before World consumes the reply.
+    // Restart at durable acquisition, before Kronos consumes the reply.
     try service.close(frame);
     service_live = false;
     try namespace.close();
@@ -540,7 +540,7 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     _ = try service.resumeTask(frame, "resume", accepted.receipt.task, status.value.revision);
     if (captured) {
         // Recover/interpret the raw acquisition, then test the settled boundary
-        // before World consumes it, using the non-inference adapter fixture.
+        // before Kronos consumes it, using the non-inference adapter fixture.
         try std.testing.expect(try service.pump(frame) == .progressed);
         try checkCaptureImport(a, frame, io, &service, &namespace, &service_live, &namespace_live, path, path_buffer[0..length], accepted.receipt.task, "settled-capture");
     }
@@ -550,7 +550,7 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
         if (step == .waiting) break;
     }
     if (captured) {
-        // Projection and its World successor succeeded while pressure remained.
+        // Projection and its Kronos successor succeeded while pressure remained.
         // Release only this fixture's unrelated reservations for later cases.
         try namespace.store.begin();
         try namespace.store.database.run("DELETE FROM reservations WHERE substr(attempt,2)=?", &.{.{ .blob = &@as([31]u8, @splat(250)) }});
@@ -604,7 +604,7 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
                     defer finished.deinit();
                     try std.testing.expect(finished.value.terminal());
                     const imported_bytes = try imported_namespace.store.object(frame, finished.value.result.?, 128 * 1024);
-                    var imported_output = try agent.contracts.decodeOwned(T.Output, frame, imported_bytes);
+                    var imported_output = try protean.contracts.decodeOwned(T.Output, frame, imported_bytes);
                     defer imported_output.deinit();
                     phase = "check imported inbox result";
                     try std.testing.expectEqual(7, imported_output.value.answer);
@@ -641,7 +641,7 @@ fn ownerRecovery(captured: bool, image: []const u8) !void {
     defer completed.deinit();
     try std.testing.expect(completed.value.terminal());
     const result = try namespace.store.object(frame, completed.value.result.?, 128 * 1024);
-    var decoded = try agent.contracts.decodeOwned(T.Output, frame, result);
+    var decoded = try protean.contracts.decodeOwned(T.Output, frame, result);
     defer decoded.deinit();
     try std.testing.expectEqual(7, decoded.value.answer);
     try std.testing.expect(decoded.value.inbox == .message);
@@ -908,10 +908,10 @@ fn largeArtifactBatch(service: *native.tasks.Service(T), task_id: [16]u8) !void 
         id: [32]u8,
         task: ?[16]u8,
         value: @TypeOf(reference),
-        media_type: agent.contracts.Text(128),
-        schema_id: ?agent.contracts.Text(128),
+        media_type: protean.contracts.Text(128),
+        schema_id: ?protean.contracts.Text(128),
     };
-    const encoded = try agent.contracts.encodeOwned(Artifact, a, .{ .id = id, .task = task_id, .value = reference, .media_type = .{ .bytes = "application/json" }, .schema_id = .{ .bytes = "artifact-test.json.v1" } });
+    const encoded = try protean.contracts.encodeOwned(Artifact, a, .{ .id = id, .task = task_id, .value = reference, .media_type = .{ .bytes = "application/json" }, .schema_id = .{ .bytes = "artifact-test.json.v1" } });
     defer a.free(encoded);
     const record = try store.putObject(encoded);
     try store.database.run("INSERT INTO records VALUES('artifact',?,?,?)", &.{ .{ .blob = &id }, .{ .blob = &task_id }, .{ .blob = &record.digest } });
@@ -939,7 +939,7 @@ fn largeArtifactBatch(service: *native.tasks.Service(T), task_id: [16]u8) !void 
         var published = task.value;
         published.result_artifact = id;
         published.client_result = reference;
-        const body = try agent.contracts.encodeOwned(@TypeOf(published), frame, published);
+        const body = try protean.contracts.encodeOwned(@TypeOf(published), frame, published);
         try store.begin();
         defer store.rollback();
         const stored = try store.putObject(body);
@@ -949,7 +949,7 @@ fn largeArtifactBatch(service: *native.tasks.Service(T), task_id: [16]u8) !void 
 
     // The fixture's existing SQLite is outside this allocator. Reserve its
     // 16MiB plus the production worker's 16MiB inside the same host-sized budget.
-    var budget: world.AllocationBudget = .{ .parent = a, .limit = 64 * 1024 * 1024 };
+    var budget: kronos.AllocationBudget = .{ .parent = a, .limit = 64 * 1024 * 1024 };
     const bounded = budget.allocator();
     const reservation = try bounded.alloc(u8, 32 * 1024 * 1024);
     defer bounded.free(reservation);
@@ -985,13 +985,13 @@ fn largeArtifactBatch(service: *native.tasks.Service(T), task_id: [16]u8) !void 
 
 test "an inbox identity cannot be redeclared with a different message contract" {
     const a = std.testing.allocator;
-    var b = boundary.source.Builder.init(a);
+    var b = horos.source.Builder.init(a);
     defer b.deinit();
-    var registry = agent.admission.Registry.init(a);
+    var registry = protean.admission.Registry.init(a);
     defer registry.deinit();
-    const ctx = agent.Context{ .builder = &b, .registry = &registry };
+    const ctx = protean.Context{ .builder = &b, .registry = &registry };
     try std.testing.expectEqual(try Inbox.declare(ctx), try Inbox.declare(ctx));
-    try std.testing.expectError(error.InvalidInboxContract, agent.inbox.Profile(u64).declare(ctx));
+    try std.testing.expectError(error.InvalidInboxContract, protean.inbox.Profile(u64).declare(ctx));
 }
 
 fn LargeResultContract(comptime escaped: bool) type {
@@ -1002,7 +1002,7 @@ fn LargeResultContract(comptime escaped: bool) type {
         pub const failure_schema_id = "large-result.failure.v1";
         pub const message_schema_id = "large-result.message.v1";
         pub const Input = bool;
-        pub const Output = if (escaped) agent.contracts.Text(1024 * 1024) else agent.contracts.Bytes(1024 * 1024);
+        pub const Output = if (escaped) protean.contracts.Text(1024 * 1024) else protean.contracts.Bytes(1024 * 1024);
         pub const Failure = Output;
         pub const Message = void;
         pub const escaped_text = escaped;
@@ -1011,7 +1011,7 @@ fn LargeResultContract(comptime escaped: bool) type {
 }
 fn LargeResultProgram(comptime Types: type) type {
     return struct {
-        pub fn emit(c: agent.Context) !boundary.source.Module {
+        pub fn emit(c: protean.Context) !horos.source.Module {
             const b = c.builder;
             const bytes = try c.schema(Types.Output);
             const entry = try b.declare(&.{try c.schema(bool)}, bytes, &.{}, &.{});
@@ -1042,7 +1042,7 @@ test "dense short results use exact references across batches restart and import
         pub const failure_schema_id = "dense-result.failure.v1";
         pub const message_schema_id = "dense-result.message.v1";
         pub const Input = bool;
-        pub const Output = agent.contracts.Vector(u8, 10_000);
+        pub const Output = protean.contracts.Vector(u8, 10_000);
         pub const Failure = Output;
         pub const Message = void;
         pub const escaped_text = false;
@@ -1055,12 +1055,12 @@ test "dense short results use exact references across batches restart and import
 fn largeResultWitness(comptime Types: type) !void {
     const harness = std.testing.allocator;
     const io = std.testing.io;
-    var compiled = try agent.compile(harness, agent.system(.{ .InitialArgs = bool, .Result = Types.Output, .Failure = Types.Failure, .application = LargeResultProgram(Types) }));
+    var compiled = try protean.compile(harness, protean.system(.{ .InitialArgs = bool, .Result = Types.Output, .Failure = Types.Failure, .application = LargeResultProgram(Types) }));
     defer compiled.deinit();
-    const image = try harness.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
+    const image = try harness.alloc(u8, try horos.data.program_image.encodedLength(compiled.program));
     defer harness.free(image);
     _ = try compiled.encode(harness, image);
-    const admitted_image = try boundary.data.program_image.Admitted.decode(harness, image);
+    const admitted_image = try horos.data.program_image.Admitted.decode(harness, image);
     defer admitted_image.deinit();
     const manifest = try ownerManifest(harness, image, admitted_image.identity(), "large-result-test");
     defer harness.free(manifest);
@@ -1086,7 +1086,7 @@ fn largeResultWitness(comptime Types: type) !void {
 
     // Authoring/image bytes above model build-time work and embedded read-only
     // assets. All runtime owners below share the real 64MiB allocation budget.
-    var budget: world.AllocationBudget = .{ .parent = harness, .limit = 64 * 1024 * 1024 };
+    var budget: kronos.AllocationBudget = .{ .parent = harness, .limit = 64 * 1024 * 1024 };
     const a = budget.allocator();
     // SQLite is charged by Namespace.open. Reserve only the absent process
     // worker and input framer, then actually admit the large resource set.
@@ -1264,7 +1264,7 @@ const CleanupTypes = struct {
     pub const Message = void;
 };
 const CleanupApplication = struct {
-    pub fn emit(c: agent.Context) !boundary.source.Module {
+    pub fn emit(c: protean.Context) !horos.source.Module {
         const b = c.builder;
         const unit = try c.schema(void);
         const boolean = try c.schema(bool);
@@ -1272,7 +1272,7 @@ const CleanupApplication = struct {
         const body = try b.declare(&.{}, unit, &.{}, &.{});
         // Stop inside protect before selecting failure versus cancellation.
         try b.define(body, try b.term(.{ .yield_then = try b.term(.{ .fail = try b.constant(void, {}) }) }));
-        const exit_info = try boundary.library.cleanup.exitInfo(b, unit);
+        const exit_info = try horos.library.cleanup.exitInfo(b, unit);
         const cleanup = try b.declare(&.{exit_info}, unit, &.{}, &.{});
         try b.define(cleanup, try b.term(.{ .yield_then = try b.term(.{ .conditional = .{
             .condition = try b.reference(b.parameter(entry, 0)),
@@ -1371,12 +1371,12 @@ fn checkCleanupArchiveFact(a: std.mem.Allocator, frame: std.mem.Allocator, io: s
 test "terminal cleanup failures retain bounded shutdown ownership without runnable work" {
     const a = std.testing.allocator;
     const io = std.testing.io;
-    var compiled = try agent.compile(a, agent.system(.{ .InitialArgs = bool, .Result = void, .Failure = void, .application = CleanupApplication }));
+    var compiled = try protean.compile(a, protean.system(.{ .InitialArgs = bool, .Result = void, .Failure = void, .application = CleanupApplication }));
     defer compiled.deinit();
-    const image = try a.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
+    const image = try a.alloc(u8, try horos.data.program_image.encodedLength(compiled.program));
     defer a.free(image);
     _ = try compiled.encode(a, image);
-    const admitted_image = try boundary.data.program_image.Admitted.decode(a, image);
+    const admitted_image = try horos.data.program_image.Admitted.decode(a, image);
     defer admitted_image.deinit();
     const manifest = try ownerManifest(a, image, admitted_image.identity(), "cleanup-test");
     defer a.free(manifest);

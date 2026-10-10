@@ -1,11 +1,11 @@
 const std = @import("std");
-const agent = @import("agent");
-const boundary = @import("boundary");
-const source = boundary.source;
-const data = boundary.data;
+const protean = @import("protean");
+const horos = @import("horos");
+const source = horos.source;
+const data = horos.data;
 const a = std.testing.allocator;
 const Answer = union(enum(u32)) { contribute: struct { value: u64 } = 1 };
-pub const P = agent.model_invocation.Profile(Answer, .{
+pub const P = protean.model_invocation.Profile(Answer, .{
     .{ .name = "contribute", .description = "Supply the requested contribution." },
 }, .{
     .model_id_bytes = 32,
@@ -24,9 +24,9 @@ fn producer(allocator: std.mem.Allocator, direct: bool) ![]u8 {
     var b = source.Builder.init(allocator);
     defer b.deinit();
     const unit = try b.scalar(void);
-    const request = try agent.contracts.schema(P.Request, &b);
-    const offered = try agent.contracts.schema([1]bool, &b);
-    const result = try agent.contracts.schema(P.Interpretation, &b);
+    const request = try protean.contracts.schema(P.Request, &b);
+    const offered = try protean.contracts.schema([1]bool, &b);
+    const result = try protean.contracts.schema(P.Interpretation, &b);
     const effect = try P.declare(&b);
     const helper = try b.declare(&.{ request, offered }, result, &.{effect}, &.{});
     const entry = try b.declare(&.{ request, offered }, result, &.{effect}, &.{});
@@ -36,7 +36,7 @@ fn producer(allocator: std.mem.Allocator, direct: bool) ![]u8 {
     const answer = try b.variable(result);
     var body = try b.bind(answer, call, try b.pure(try b.reference(answer)));
     if (direct) {
-        const response = try b.variable(try agent.contracts.schema(P.Result, &b));
+        const response = try b.variable(try protean.contracts.schema(P.Result, &b));
         body = try b.bind(response, try b.term(.{ .perform = .{
             .effect = effect,
             .payload = try b.reference(b.parameter(entry, 0)),
@@ -65,19 +65,19 @@ const Application = struct {
     var completion = false;
     var wrong_result = false;
     var mutate_object = false;
-    pub fn emit(c: agent.Context) !source.Module {
+    pub fn emit(c: protean.Context) !source.Module {
         const b = c.builder;
         const unit = try b.scalar(void);
         const request = try c.schema(P.Request);
         const offered = try c.schema([1]bool);
         const result = try c.schema(P.Interpretation);
-        const helper = try agent.responders.defineModel(P, c, try c.literal(void, {}), false);
+        const helper = try protean.responders.defineModel(P, c, try c.literal(void, {}), false);
         const model = try P.declare(b);
         const bound = if (completion) try completionHelper(c, request, offered, result) else if (wrong_result)
             try wrongHelper(c, request, offered)
         else
             helper;
-        const participant = try agent.participant.declare(c, .{
+        const participant = try protean.participant.declare(c, .{
             .instance = "producer",
             .object = bytes,
             .entry = "contribute",
@@ -99,14 +99,14 @@ const Application = struct {
     }
 };
 
-fn wrongHelper(c: agent.Context, request: source.Id, offered: source.Id) !source.Id {
+fn wrongHelper(c: protean.Context, request: source.Id, offered: source.Id) !source.Id {
     const b = c.builder;
     const helper = try b.declare(&.{ request, offered }, try b.scalar(bool), &.{}, &.{});
     try b.define(helper, try b.pure(try b.constant(bool, true)));
     return helper;
 }
 
-fn completionHelper(c: agent.Context, request: source.Id, offered: source.Id, result: source.Id) !source.Id {
+fn completionHelper(c: protean.Context, request: source.Id, offered: source.Id, result: source.Id) !source.Id {
     const b = c.builder;
     const write = try c.external("fixture/target-write", try b.scalar(void), result, .write);
     const helper = try b.declare(&.{ request, offered }, result, &.{write}, &.{});
@@ -120,7 +120,7 @@ fn completionHelper(c: agent.Context, request: source.Id, offered: source.Id, re
     try b.define(helper, operation);
     return helper;
 }
-const System = agent.system(.{
+const System = protean.system(.{
     .InitialArgs = Input,
     .Result = P.Interpretation,
     .Failure = void,
@@ -130,7 +130,7 @@ const System = agent.system(.{
 test "compiled participant final link rejects an invalid optimization profile" {
     Application.bytes = try producer(a, false);
     defer a.free(Application.bytes);
-    try std.testing.expectError(error.InvalidOptimizationProfile, agent.compileObserved(a, System, .{ .boundary_options = .{ .profile = .{ .record = .{
+    try std.testing.expectError(error.InvalidOptimizationProfile, protean.compileObserved(a, System, .{ .horos_options = .{ .profile = .{ .record = .{
         .version = 0,
         .image_identity = @splat(0),
         .block_counts = &.{},
@@ -142,7 +142,7 @@ test "compiled participant uses the actual checked model responder through norma
     const bytes = try producer(a, false);
     defer a.free(bytes);
     Application.bytes = bytes;
-    var compiled = try agent.compile(a, System);
+    var compiled = try protean.compile(a, System);
     defer compiled.deinit();
     try std.testing.expectEqual(1, compiled.program.effects.len);
     try std.testing.expectEqualStrings("agent.model.invoke.v3", compiled.program.effects[0].identity);
@@ -159,18 +159,18 @@ test "compiled assessment permits its model policy but rejects missing allowance
     Application.bytes = bytes;
     Application.assessment = true;
     defer Application.assessment = false;
-    var compiled = try agent.compile(a, System);
+    var compiled = try protean.compile(a, System);
     defer compiled.deinit();
     Application.allow_model = false;
     defer Application.allow_model = true;
-    try std.testing.expectError(error.SpeculativeEffect, agent.compile(a, System));
+    try std.testing.expectError(error.SpeculativeEffect, protean.compile(a, System));
 }
 
 test "compiled participant cannot directly emit a protected model operation" {
     const bytes = try producer(a, true);
     defer a.free(bytes);
     Application.bytes = bytes;
-    try std.testing.expectError(error.ProtectedEffectBypass, agent.compile(a, System));
+    try std.testing.expectError(error.ProtectedEffectBypass, protean.compile(a, System));
 }
 
 test "compiled assessment cannot acquire target writing through a helper substitution" {
@@ -181,7 +181,7 @@ test "compiled assessment cannot acquire target writing through a helper substit
     defer Application.assessment = false;
     Application.completion = true;
     defer Application.completion = false;
-    try std.testing.expectError(error.SpeculativeEffect, agent.compile(a, System));
+    try std.testing.expectError(error.SpeculativeEffect, protean.compile(a, System));
 }
 
 test "participant binding checks the actual helper result at the source-free linker" {
@@ -190,7 +190,7 @@ test "participant binding checks the actual helper result at the source-free lin
     Application.bytes = bytes;
     Application.wrong_result = true;
     defer Application.wrong_result = false;
-    try std.testing.expectError(error.IncompatibleInterface, agent.compile(a, System));
+    try std.testing.expectError(error.IncompatibleInterface, protean.compile(a, System));
 }
 
 test "participant admission owns the exact component bytes before caller mutation" {
@@ -199,7 +199,7 @@ test "participant admission owns the exact component bytes before caller mutatio
     Application.bytes = bytes;
     Application.mutate_object = true;
     defer Application.mutate_object = false;
-    var compiled = try agent.compile(a, System);
+    var compiled = try protean.compile(a, System);
     defer compiled.deinit();
     try std.testing.expectEqual(@as(u8, 0xff), bytes[0]);
     try std.testing.expectEqualStrings("agent.model.invoke.v3", compiled.program.effects[0].identity);
@@ -234,12 +234,12 @@ const IncomingOwner = struct {
     var object: []const u8 = &.{};
     var wrapped = false;
     var assessment = true;
-    pub fn emit(c: agent.Context) !source.Module {
+    pub fn emit(c: protean.Context) !source.Module {
         const b = c.builder;
         const t = try incomingOwnerType(b, wrapped);
         try c.registry.classify(t.effect, .internal);
         const unit = try b.scalar(void);
-        const imported = try agent.participant.declare(c, .{ .instance = "incoming", .object = object, .entry = "dispose", .parameters = &.{t.input}, .result = unit, .effects = &.{.{ .symbol = "demand", .effect = t.effect }} });
+        const imported = try protean.participant.declare(c, .{ .instance = "incoming", .object = object, .entry = "dispose", .parameters = &.{t.input}, .result = unit, .effects = &.{.{ .symbol = "demand", .effect = t.effect }} });
         if (assessment) try c.registry.speculate(imported, &.{});
         const entry = try b.declare(&.{unit}, unit, &.{}, &.{});
         try b.define(entry, try b.pure(try b.constant(void, {})));
@@ -247,25 +247,25 @@ const IncomingOwner = struct {
     }
 };
 test "compiled assessment rejects incoming cleanup owners directly and through aggregates" {
-    const OwnerSystem = agent.system(.{ .InitialArgs = void, .Result = void, .Failure = void, .application = IncomingOwner });
+    const OwnerSystem = protean.system(.{ .InitialArgs = void, .Result = void, .Failure = void, .application = IncomingOwner });
     for ([_]bool{ false, true }) |wrapped| {
         const bytes = try incomingOwner(a, wrapped);
         defer a.free(bytes);
         IncomingOwner.object = bytes;
         IncomingOwner.wrapped = wrapped;
         IncomingOwner.assessment = false;
-        var valid = try agent.compile(a, OwnerSystem);
+        var valid = try protean.compile(a, OwnerSystem);
         valid.deinit();
         IncomingOwner.assessment = true;
-        try std.testing.expectError(error.SpeculativeCapture, agent.compile(a, OwnerSystem));
+        try std.testing.expectError(error.SpeculativeCapture, protean.compile(a, OwnerSystem));
     }
 }
 
 fn inspectIncomingAllocation(allocator: std.mem.Allocator, object: data.component.Object) !void {
-    var registry = agent.admission.Registry.init(allocator);
+    var registry = protean.admission.Registry.init(allocator);
     defer registry.deinit();
-    const item: agent.admission.CompiledImport = .{ .function = 0, .instance = "incoming", .object = &.{}, .entry = "dispose", .effects = &.{}, .participant = true };
-    agent.participant.inspect(allocator, object, item, &registry, &.{}) catch |err| {
+    const item: protean.admission.CompiledImport = .{ .function = 0, .instance = "incoming", .object = &.{}, .entry = "dispose", .effects = &.{}, .participant = true };
+    protean.participant.inspect(allocator, object, item, &registry, &.{}) catch |err| {
         if (err == error.SpeculativeCapture) return;
         return err;
     };

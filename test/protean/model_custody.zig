@@ -1,11 +1,11 @@
 const std = @import("std");
-const boundary = @import("boundary");
-const agent = @import("agent");
-const world = @import("world");
-const contracts = agent.contracts;
-const model = agent.model_invocation;
-const source = boundary.source;
-const data = boundary.data;
+const horos = @import("horos");
+const protean = @import("protean");
+const kronos = @import("kronos");
+const contracts = protean.contracts;
+const model = protean.model_invocation;
+const source = horos.source;
+const data = horos.data;
 const allocator = std.testing.allocator;
 
 const Answer = union(enum(u32)) {
@@ -73,25 +73,25 @@ fn compileModel(comptime Q: type, comptime multiple: bool) !source.Compiled {
 fn compileResponder(comptime Q: type, comptime multiple: bool, comptime observed: bool) !source.Compiled {
     var b = source.Builder.init(allocator);
     defer b.deinit();
-    var registry = agent.admission.Registry.init(b.allocator());
+    var registry = protean.admission.Registry.init(b.allocator());
     defer registry.deinit();
-    const context: agent.Context = .{ .builder = &b, .registry = &registry };
+    const context: protean.Context = .{ .builder = &b, .registry = &registry };
     const failure = try b.constant(void, {});
-    const define = if (observed) agent.responders.defineModelObserved else agent.responders.defineModel;
+    const define = if (observed) protean.responders.defineModelObserved else protean.responders.defineModel;
     const entry = try define(Q, context, failure, multiple);
     const shared = try define(Q, context, failure, multiple);
     try std.testing.expectEqual(entry, shared);
     const module = b.module(entry, try b.scalar(void));
-    try agent.admission.verify(allocator, module, &registry);
-    return boundary.program.compile(allocator, module);
+    try protean.admission.verify(allocator, module, &registry);
+    return horos.program.compile(allocator, module);
 }
 
-test "protected Agent source rejects raw model emission with forged request-time offers" {
+test "protected Protean source rejects raw model emission with forged request-time offers" {
     var b = source.Builder.init(allocator);
     defer b.deinit();
-    var registry = agent.admission.Registry.init(b.allocator());
+    var registry = protean.admission.Registry.init(b.allocator());
     defer registry.deinit();
-    const context: agent.Context = .{ .builder = &b, .registry = &registry };
+    const context: protean.Context = .{ .builder = &b, .registry = &registry };
     const effect = try P.declare(&b);
     try registry.classify(effect, .model);
     const entry = try b.declare(&.{try context.schema(P.Request)}, try context.schema(P.Interpretation), &.{effect}, &.{});
@@ -108,20 +108,20 @@ test "protected Agent source rejects raw model emission with forged request-time
     } });
     try b.define(entry, try b.bind(normalized, raw, forged));
     const module = b.module(entry, try b.scalar(void));
-    // Valid public Boundary source may choose another policy. It cannot acquire
-    // Agent's offer-custody claim merely by invoking the pure candidate decoder.
-    var raw_compiled = try boundary.program.compile(allocator, module);
+    // Valid public Horos source may choose another policy. It cannot acquire
+    // Protean's offer-custody claim merely by invoking the pure candidate decoder.
+    var raw_compiled = try horos.program.compile(allocator, module);
     defer raw_compiled.deinit();
-    try std.testing.expectError(error.ProtectedEffectBypass, agent.admission.verify(allocator, module, &registry));
+    try std.testing.expectError(error.ProtectedEffectBypass, protean.admission.verify(allocator, module, &registry));
 }
 
 test "reserved model identity cannot evade custody by omitted or read classification" {
-    inline for (.{ @as(?agent.admission.Role, null), @as(?agent.admission.Role, .read) }) |role| {
+    inline for (.{ @as(?protean.admission.Role, null), @as(?protean.admission.Role, .read) }) |role| {
         var b = source.Builder.init(allocator);
         defer b.deinit();
-        var registry = agent.admission.Registry.init(b.allocator());
+        var registry = protean.admission.Registry.init(b.allocator());
         defer registry.deinit();
-        const context: agent.Context = .{ .builder = &b, .registry = &registry };
+        const context: protean.Context = .{ .builder = &b, .registry = &registry };
         const effect = try P.declare(&b);
         if (role) |classification| try registry.classify(effect, classification);
         const entry = try b.declare(&.{try context.schema(P.Request)}, try context.schema(P.Result), &.{effect}, &.{});
@@ -130,27 +130,27 @@ test "reserved model identity cannot evade custody by omitted or read classifica
             .payload = try b.reference(b.parameter(entry, 0)),
         } }));
         const module = b.module(entry, try b.scalar(void));
-        var raw = try boundary.program.compile(allocator, module);
+        var raw = try horos.program.compile(allocator, module);
         defer raw.deinit();
-        try std.testing.expectError(error.EffectRoleMismatch, agent.admission.verify(allocator, module, &registry));
+        try std.testing.expectError(error.EffectRoleMismatch, protean.admission.verify(allocator, module, &registry));
     }
 }
 
 test "observed model result preserves normalized provenance and typed recovery details" {
-    const Observation = agent.responders.ModelObservation(P, false);
+    const Observation = protean.responders.ModelObservation(P, false);
     var b = source.Builder.init(allocator);
     defer b.deinit();
-    var registry = agent.admission.Registry.init(b.allocator());
+    var registry = protean.admission.Registry.init(b.allocator());
     defer registry.deinit();
-    const context: agent.Context = .{ .builder = &b, .registry = &registry };
+    const context: protean.Context = .{ .builder = &b, .registry = &registry };
     const failure = try b.constant(void, {});
-    const entry = try agent.responders.defineModelObserved(P, context, failure, false);
-    _ = try agent.responders.defineModel(P, context, failure, false);
+    const entry = try protean.responders.defineModelObserved(P, context, failure, false);
+    _ = try protean.responders.defineModel(P, context, failure, false);
     // The convenience projection reuses the same checked model-emission owner.
     try std.testing.expectEqual(1, registry.sites.items.len);
     const module = b.module(entry, try b.scalar(void));
-    try agent.admission.verify(allocator, module, &registry);
-    var compiled = try boundary.program.compile(allocator, module);
+    try protean.admission.verify(allocator, module, &registry);
+    var compiled = try horos.program.compile(allocator, module);
     defer compiled.deinit();
     const value: Input = .{ .request = template(&.{}, single), .offered = .{ true, false } };
     var parked = try start(compiled.program, value);
@@ -191,19 +191,19 @@ fn expectNormalized(expected: P.Result, actual: P.Result) !void {
     try std.testing.expectEqualSlices(u8, expected_bytes, actual_bytes);
 }
 
-fn start(program: data.activation.Program, value: Input) !world.invocation.Outcome {
+fn start(program: data.activation.Program, value: Input) !kronos.invocation.Outcome {
     const bytes = try contracts.encodeOwned(Input, allocator, value);
     defer allocator.free(bytes);
-    const invocation_image_0 = try allocator.alloc(u8, try boundary.data.program_image.encodedLength(program));
+    const invocation_image_0 = try allocator.alloc(u8, try horos.data.program_image.encodedLength(program));
     defer allocator.free(invocation_image_0);
-    _ = try boundary.data.program_image.encode(allocator, program, invocation_image_0);
-    return world.invocation.invoke(allocator, .{
+    _ = try horos.data.program_image.encode(allocator, program, invocation_image_0);
+    return kronos.invocation.invoke(allocator, .{
         .image = invocation_image_0,
         .instance = .{ .initial_args = bytes },
     });
 }
 
-fn expectRequest(outcome: world.invocation.Outcome, value: Input) !void {
+fn expectRequest(outcome: kronos.invocation.Outcome, value: Input) !void {
     try std.testing.expect(outcome.record == .requested);
     var request_owner_0 = try data.invocation.decode(
         data.invocation.Request,
@@ -251,9 +251,9 @@ fn result(items: []const P.OutputItem) P.Result {
 fn resumeResult(
     comptime Result: type,
     program: data.activation.Program,
-    parked: world.invocation.Outcome,
+    parked: kronos.invocation.Outcome,
     reply: Result,
-) !world.invocation.Outcome {
+) !kronos.invocation.Outcome {
     try std.testing.expect(parked.record == .requested);
     var request_owner_1 = try data.invocation.decode(
         data.invocation.Request,
@@ -273,10 +273,10 @@ fn resumeResult(
     const bytes = try allocator.alloc(u8, length);
     defer allocator.free(bytes);
     _ = try data.invocation.encode(data.invocation.Result, allocator, bound, bytes);
-    const invocation_image_1 = try allocator.alloc(u8, try boundary.data.program_image.encodedLength(program));
+    const invocation_image_1 = try allocator.alloc(u8, try horos.data.program_image.encodedLength(program));
     defer allocator.free(invocation_image_1);
-    _ = try boundary.data.program_image.encode(allocator, program, invocation_image_1);
-    return world.invocation.invoke(allocator, .{
+    _ = try horos.data.program_image.encode(allocator, program, invocation_image_1);
+    return kronos.invocation.invoke(allocator, .{
         .image = invocation_image_1,
         .instance = .{ .state = parked.record.requested.state.? },
         .control = .{ .reply = bytes },
@@ -286,7 +286,7 @@ fn resumeResult(
 fn finish(
     comptime T: type,
     program: data.activation.Program,
-    parked: world.invocation.Outcome,
+    parked: kronos.invocation.Outcome,
     reply: P.Result,
 ) !contracts.Decoded(T) {
     var outcome = try resumeResult(P.Result, program, parked, reply);
@@ -311,10 +311,10 @@ test "model responder derives held offers and preserves the complete semantic re
         const value: Input = .{ .request = template(&forged, single), .offered = offered };
         const bytes = try contracts.encodeOwned(Input, allocator, value);
         defer allocator.free(bytes);
-        const invocation_image_2 = try allocator.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
+        const invocation_image_2 = try allocator.alloc(u8, try horos.data.program_image.encodedLength(compiled.program));
         defer allocator.free(invocation_image_2);
-        _ = try boundary.data.program_image.encode(allocator, compiled.program, invocation_image_2);
-        var parked = try world.invocation.invoke(allocator, .{
+        _ = try horos.data.program_image.encode(allocator, compiled.program, invocation_image_2);
+        var parked = try kronos.invocation.invoke(allocator, .{
             .image = invocation_image_2,
             .instance = .{ .initial_args = bytes },
         });
@@ -462,7 +462,7 @@ test "batch responder retains ordered candidates and enforces captured call poli
     }
 }
 
-fn pairModule(c: agent.Context) !source.Module {
+fn pairModule(c: protean.Context) !source.Module {
     const b = c.builder;
     const effect = try P.declare(b);
     const entry = try b.declare(
@@ -486,8 +486,8 @@ fn pairModule(c: agent.Context) !source.Module {
     return b.module(entry, try b.scalar(void));
 }
 
-fn pairCall(c: agent.Context, value: source.Id) !source.Id {
-    return agent.responders.invokeModel(
+fn pairCall(c: protean.Context, value: source.Id) !source.Id {
+    return protean.responders.invokeModel(
         P,
         c,
         try c.builder.constant(void, {}),
@@ -501,13 +501,13 @@ test "two scoped model calls retain separate offered sets and post answer contin
     const Application = struct {
         pub const emit = pairModule;
     };
-    const System = agent.system(.{
+    const System = protean.system(.{
         .InitialArgs = PairInput,
         .Result = PairResult,
         .Failure = void,
         .application = Application,
     });
-    var compiled = try agent.compile(allocator, System);
+    var compiled = try protean.compile(allocator, System);
     defer compiled.deinit();
     const input: PairInput = .{
         .first = .{ .request = template(&.{}, single), .offered = .{ true, false } },
@@ -518,10 +518,10 @@ test "two scoped model calls retain separate offered sets and post answer contin
     };
     const bytes = try contracts.encodeOwned(PairInput, allocator, input);
     defer allocator.free(bytes);
-    const invocation_image_3 = try allocator.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
+    const invocation_image_3 = try allocator.alloc(u8, try horos.data.program_image.encodedLength(compiled.program));
     defer allocator.free(invocation_image_3);
-    _ = try boundary.data.program_image.encode(allocator, compiled.program, invocation_image_3);
-    var first = try world.invocation.invoke(allocator, .{
+    _ = try horos.data.program_image.encode(allocator, compiled.program, invocation_image_3);
+    var first = try kronos.invocation.invoke(allocator, .{
         .image = invocation_image_3,
         .instance = .{ .initial_args = bytes },
     });
@@ -589,7 +589,7 @@ fn expectSharedSchema(comptime Q: type, program: data.activation.Program) !void 
 test "model responder executes indexes 31 32 and 63 while an unoffered declaration rejects" {
     const Q = Many();
     const ManyInput = struct { request: Q.Request, offered: [64]bool };
-    const FixtureModel = agent.model(.{
+    const FixtureModel = protean.model(.{
         .name = "many",
         .model = "many-custody-model",
         .protocol = struct {
@@ -609,10 +609,10 @@ test "model responder executes indexes 31 32 and 63 while an unoffered declarati
         .offered = offered,
     });
     defer allocator.free(bytes);
-    const invocation_image_4 = try allocator.alloc(u8, try boundary.data.program_image.encodedLength(compiled.program));
+    const invocation_image_4 = try allocator.alloc(u8, try horos.data.program_image.encodedLength(compiled.program));
     defer allocator.free(invocation_image_4);
-    _ = try boundary.data.program_image.encode(allocator, compiled.program, invocation_image_4);
-    var parked = try world.invocation.invoke(allocator, .{
+    _ = try horos.data.program_image.encode(allocator, compiled.program, invocation_image_4);
+    var parked = try kronos.invocation.invoke(allocator, .{
         .image = invocation_image_4,
         .instance = .{ .initial_args = bytes },
     });
@@ -654,13 +654,13 @@ test "model responder executes indexes 31 32 and 63 while an unoffered declarati
 test "stateless replay responder retains opaque data while protecting the request-time offer" {
     var b = source.Builder.init(allocator);
     defer b.deinit();
-    var registry = agent.admission.Registry.init(b.allocator());
+    var registry = protean.admission.Registry.init(b.allocator());
     defer registry.deinit();
-    const c: agent.Context = .{ .builder = &b, .registry = &registry };
-    const entry = try agent.responders.defineReplayModelObserved(P, c, try b.constant(void, {}), false);
+    const c: protean.Context = .{ .builder = &b, .registry = &registry };
+    const entry = try protean.responders.defineReplayModelObserved(P, c, try b.constant(void, {}), false);
     const module = b.module(entry, try b.scalar(void));
-    try agent.admission.verify(allocator, module, &registry);
-    var compiled = try boundary.program.compile(allocator, module);
+    try protean.admission.verify(allocator, module, &registry);
+    var compiled = try horos.program.compile(allocator, module);
     defer compiled.deinit();
     const ReplayInput = struct { request: P.ReplayRequest, offered: [2]bool };
     const input: ReplayInput = .{ .request = .{ .invocation = template(&.{}, single), .replay = .{ .bytes = "[]" }, .results = .{ .items = &.{} } }, .offered = .{ true, false } };
@@ -669,7 +669,7 @@ test "stateless replay responder retains opaque data while protecting the reques
     const image = try allocator.alloc(u8, try data.program_image.encodedLength(compiled.program));
     defer allocator.free(image);
     _ = try data.program_image.encode(allocator, compiled.program, image);
-    var parked = try world.invocation.invoke(allocator, .{ .image = image, .instance = .{ .initial_args = args } });
+    var parked = try kronos.invocation.invoke(allocator, .{ .image = image, .instance = .{ .initial_args = args } });
     defer parked.deinit();
     try std.testing.expect(parked.record == .requested);
     var request = try data.invocation.decode(data.invocation.Request, allocator, parked.record.requested.request);
@@ -679,7 +679,7 @@ test "stateless replay responder retains opaque data while protecting the reques
     defer payload.deinit();
     try std.testing.expectEqual(1, payload.value.invocation.tools.items.len);
     try std.testing.expectEqualStrings("choose", payload.value.invocation.tools.items[0].name.bytes);
-    const Observation = agent.responders.ReplayModelObservation(P, false);
+    const Observation = protean.responders.ReplayModelObservation(P, false);
     for ([_]model.ReplayStatus{ .complete, .unsupported, .capacity }) |status| {
         const reply: P.ReplayResult = .{ .result = result(&.{call(.choose, 42)}), .replay = .{ .bytes = "opaque synthetic replay" }, .replay_status = status, .usage = null };
         var finished = try resumeResult(P.ReplayResult, compiled.program, parked, reply);
@@ -699,30 +699,30 @@ test "stateless replay responder retains opaque data while protecting the reques
 }
 
 test "replay model identity cannot bypass the protected responder" {
-    inline for (.{ @as(?agent.admission.Role, null), @as(?agent.admission.Role, .read), @as(?agent.admission.Role, .model) }) |role| {
+    inline for (.{ @as(?protean.admission.Role, null), @as(?protean.admission.Role, .read), @as(?protean.admission.Role, .model) }) |role| {
         var b = source.Builder.init(allocator);
         defer b.deinit();
-        var registry = agent.admission.Registry.init(b.allocator());
+        var registry = protean.admission.Registry.init(b.allocator());
         defer registry.deinit();
-        const c: agent.Context = .{ .builder = &b, .registry = &registry };
+        const c: protean.Context = .{ .builder = &b, .registry = &registry };
         const effect = try P.declareReplay(&b);
         if (role) |classification| try registry.classify(effect, classification);
         const entry = try b.declare(&.{try c.schema(P.ReplayRequest)}, try c.schema(P.ReplayResult), &.{effect}, &.{});
         try b.define(entry, try b.term(.{ .perform = .{ .effect = effect, .payload = try b.reference(b.parameter(entry, 0)) } }));
-        try std.testing.expectError(if (role == .model) error.ProtectedEffectBypass else error.EffectRoleMismatch, agent.admission.verify(allocator, b.module(entry, try b.scalar(void)), &registry));
+        try std.testing.expectError(if (role == .model) error.ProtectedEffectBypass else error.EffectRoleMismatch, protean.admission.verify(allocator, b.module(entry, try b.scalar(void)), &registry));
     }
 }
 
 test "reference responder preserves frozen bindings and the exact request-time offer" {
     var b = source.Builder.init(allocator);
     defer b.deinit();
-    var registry = agent.admission.Registry.init(b.allocator());
+    var registry = protean.admission.Registry.init(b.allocator());
     defer registry.deinit();
-    const c: agent.Context = .{ .builder = &b, .registry = &registry };
-    const entry = try agent.responders.defineReferenceModelObserved(P, c, try b.constant(void, {}), false);
+    const c: protean.Context = .{ .builder = &b, .registry = &registry };
+    const entry = try protean.responders.defineReferenceModelObserved(P, c, try b.constant(void, {}), false);
     const module = b.module(entry, try b.scalar(void));
-    try agent.admission.verify(allocator, module, &registry);
-    var compiled = try boundary.program.compile(allocator, module);
+    try protean.admission.verify(allocator, module, &registry);
+    var compiled = try horos.program.compile(allocator, module);
     defer compiled.deinit();
     const ReferenceInput = struct { request: P.ReferenceRequest, offered: [2]bool };
     const input: ReferenceInput = .{ .request = .{ .invocation = template(&.{}, single), .replay = null, .results = .{ .items = &.{} }, .profile = @splat(9) }, .offered = .{ true, false } };
@@ -731,7 +731,7 @@ test "reference responder preserves frozen bindings and the exact request-time o
     const image = try allocator.alloc(u8, try data.program_image.encodedLength(compiled.program));
     defer allocator.free(image);
     _ = try data.program_image.encode(allocator, compiled.program, image);
-    var parked = try world.invocation.invoke(allocator, .{ .image = image, .instance = .{ .initial_args = args } });
+    var parked = try kronos.invocation.invoke(allocator, .{ .image = image, .instance = .{ .initial_args = args } });
     defer parked.deinit();
     try std.testing.expect(parked.record == .requested);
     var request = try data.invocation.decode(data.invocation.Request, allocator, parked.record.requested.request);
@@ -747,7 +747,7 @@ test "reference responder preserves frozen bindings and the exact request-time o
         const reply: P.ReferenceResult = .{ .result = result(&.{call(.choose, 42)}), .replay = reference, .replay_status = status, .usage = null };
         var finished = try resumeResult(P.ReferenceResult, compiled.program, parked, reply);
         defer finished.deinit();
-        var observed = try contracts.decodeOwned(agent.responders.ReferenceModelObservation(P, false), allocator, finished.record.completed);
+        var observed = try contracts.decodeOwned(protean.responders.ReferenceModelObservation(P, false), allocator, finished.record.completed);
         defer observed.deinit();
         try std.testing.expectEqualDeep(reference, observed.value.normalized.replay.?);
         if (status == .complete) try std.testing.expectEqual(42, observed.value.interpretation.accepted.choose.value) else try std.testing.expectEqual(.unsupported, observed.value.interpretation.rejected);
@@ -755,36 +755,36 @@ test "reference responder preserves frozen bindings and the exact request-time o
     const unoffered: P.ReferenceResult = .{ .result = result(&.{call(.other, 73)}), .replay = reference, .replay_status = .complete, .usage = null };
     var refused = try resumeResult(P.ReferenceResult, compiled.program, parked, unoffered);
     defer refused.deinit();
-    var observation = try contracts.decodeOwned(agent.responders.ReferenceModelObservation(P, false), allocator, refused.record.completed);
+    var observation = try contracts.decodeOwned(protean.responders.ReferenceModelObservation(P, false), allocator, refused.record.completed);
     defer observation.deinit();
     try std.testing.expectEqual(.unoffered, observation.value.interpretation.rejected);
 }
 
 test "reference model identity cannot bypass the protected responder" {
-    inline for (.{ @as(?agent.admission.Role, null), @as(?agent.admission.Role, .read), @as(?agent.admission.Role, .model) }) |role| {
+    inline for (.{ @as(?protean.admission.Role, null), @as(?protean.admission.Role, .read), @as(?protean.admission.Role, .model) }) |role| {
         var b = source.Builder.init(allocator);
         defer b.deinit();
-        var registry = agent.admission.Registry.init(b.allocator());
+        var registry = protean.admission.Registry.init(b.allocator());
         defer registry.deinit();
-        const c: agent.Context = .{ .builder = &b, .registry = &registry };
+        const c: protean.Context = .{ .builder = &b, .registry = &registry };
         const effect = try P.declareReference(&b);
         if (role) |classification| try registry.classify(effect, classification);
         const entry = try b.declare(&.{try c.schema(P.ReferenceRequest)}, try c.schema(P.ReferenceResult), &.{effect}, &.{});
         try b.define(entry, try b.term(.{ .perform = .{ .effect = effect, .payload = try b.reference(b.parameter(entry, 0)) } }));
-        try std.testing.expectError(if (role == .model) error.ProtectedEffectBypass else error.EffectRoleMismatch, agent.admission.verify(allocator, b.module(entry, try b.scalar(void)), &registry));
+        try std.testing.expectError(if (role == .model) error.ProtectedEffectBypass else error.EffectRoleMismatch, protean.admission.verify(allocator, b.module(entry, try b.scalar(void)), &registry));
     }
 }
 
 test "adaptive responder keeps definitions separate from original call authority" {
     var b = source.Builder.init(allocator);
     defer b.deinit();
-    var registry = agent.admission.Registry.init(b.allocator());
+    var registry = protean.admission.Registry.init(b.allocator());
     defer registry.deinit();
-    const c: agent.Context = .{ .builder = &b, .registry = &registry };
-    const entry = try agent.responders.defineAdaptiveModelObserved(P, c, try b.constant(void, {}), false);
+    const c: protean.Context = .{ .builder = &b, .registry = &registry };
+    const entry = try protean.responders.defineAdaptiveModelObserved(P, c, try b.constant(void, {}), false);
     const module = b.module(entry, try b.scalar(void));
-    try agent.admission.verify(allocator, module, &registry);
-    var compiled = try boundary.program.compile(allocator, module);
+    try protean.admission.verify(allocator, module, &registry);
+    var compiled = try horos.program.compile(allocator, module);
     defer compiled.deinit();
     const AdaptiveInput = struct { request: P.AdaptiveRequest, offered: [2]bool };
     var input: AdaptiveInput = .{
@@ -813,7 +813,7 @@ test "adaptive responder keeps definitions separate from original call authority
     _ = try data.program_image.encode(allocator, compiled.program, image);
     const args = try contracts.encodeOwned(AdaptiveInput, allocator, input);
     defer allocator.free(args);
-    var parked = try world.invocation.invoke(allocator, .{ .image = image, .instance = .{ .initial_args = args } });
+    var parked = try kronos.invocation.invoke(allocator, .{ .image = image, .instance = .{ .initial_args = args } });
     defer parked.deinit();
     try std.testing.expect(parked.record == .requested);
     var request = try data.invocation.decode(data.invocation.Request, allocator, parked.record.requested.request);
@@ -831,7 +831,7 @@ test "adaptive responder keeps definitions separate from original call authority
         const reply: P.AdaptiveResult = .{ .result = result(&.{call(answer, 42)}), .replay = null, .replay_status = .complete, .usage = null };
         var finished = try resumeResult(P.AdaptiveResult, compiled.program, parked, reply);
         defer finished.deinit();
-        var observation = try contracts.decodeOwned(agent.responders.AdaptiveModelObservation(P, false), allocator, finished.record.completed);
+        var observation = try contracts.decodeOwned(protean.responders.AdaptiveModelObservation(P, false), allocator, finished.record.completed);
         defer observation.deinit();
         if (answer == .choose) try std.testing.expectEqual(42, observation.value.interpretation.accepted.choose.value) else try std.testing.expectEqual(.unoffered, observation.value.interpretation.rejected);
     }
@@ -839,22 +839,22 @@ test "adaptive responder keeps definitions separate from original call authority
     input.request.materialized = .{ false, true };
     const invalid_args = try contracts.encodeOwned(AdaptiveInput, allocator, input);
     defer allocator.free(invalid_args);
-    var rejected = try world.invocation.invoke(allocator, .{ .image = image, .instance = .{ .initial_args = invalid_args } });
+    var rejected = try kronos.invocation.invoke(allocator, .{ .image = image, .instance = .{ .initial_args = invalid_args } });
     defer rejected.deinit();
     try std.testing.expect(rejected.record == .failed);
 }
 
 test "adaptive model identity cannot bypass the protected responder" {
-    inline for (.{ @as(?agent.admission.Role, null), @as(?agent.admission.Role, .read), @as(?agent.admission.Role, .model) }) |role| {
+    inline for (.{ @as(?protean.admission.Role, null), @as(?protean.admission.Role, .read), @as(?protean.admission.Role, .model) }) |role| {
         var b = source.Builder.init(allocator);
         defer b.deinit();
-        var registry = agent.admission.Registry.init(b.allocator());
+        var registry = protean.admission.Registry.init(b.allocator());
         defer registry.deinit();
-        const c: agent.Context = .{ .builder = &b, .registry = &registry };
+        const c: protean.Context = .{ .builder = &b, .registry = &registry };
         const effect = try P.declareAdaptive(&b);
         if (role) |classification| try registry.classify(effect, classification);
         const entry = try b.declare(&.{try c.schema(P.AdaptiveRequest)}, try c.schema(P.AdaptiveResult), &.{effect}, &.{});
         try b.define(entry, try b.term(.{ .perform = .{ .effect = effect, .payload = try b.reference(b.parameter(entry, 0)) } }));
-        try std.testing.expectError(if (role == .model) error.ProtectedEffectBypass else error.EffectRoleMismatch, agent.admission.verify(allocator, b.module(entry, try b.scalar(void)), &registry));
+        try std.testing.expectError(if (role == .model) error.ProtectedEffectBypass else error.EffectRoleMismatch, protean.admission.verify(allocator, b.module(entry, try b.scalar(void)), &registry));
     }
 }

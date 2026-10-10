@@ -1,13 +1,13 @@
-//! Agent admission traverses cleanup retained by a composed exchange owner.
+//! Protean admission traverses cleanup retained by a composed exchange owner.
 const std = @import("std");
-const agent = @import("agent");
-const boundary = @import("boundary");
-const source = boundary.source;
-const a = boundary.authoring;
-const generator = boundary.library.generator;
+const protean = @import("protean");
+const horos = @import("horos");
+const source = horos.source;
+const a = horos.authoring;
+const generator = horos.library.generator;
 fn Application(comptime duplicate: bool, comptime assessment: bool, comptime write: bool) type {
     return struct {
-        pub fn emit(context: agent.Context) !source.Module {
+        pub fn emit(context: protean.Context) !source.Module {
             const b = context.builder;
             const c = try a.Context.init(b);
             const integer = try c.scalar(u64);
@@ -86,11 +86,11 @@ const Stage = struct {
     }
 };
 fn compile(comptime duplicate: bool, comptime assessment: bool, comptime write: bool) !void {
-    const System = agent.system(.{ .InitialArgs = void, .Result = void, .Failure = void, .application = Application(duplicate, assessment, write) });
-    var result = try agent.compile(std.testing.allocator, System);
+    const System = protean.system(.{ .InitialArgs = void, .Result = void, .Failure = void, .application = Application(duplicate, assessment, write) });
+    var result = try protean.compile(std.testing.allocator, System);
     defer result.deinit();
 }
-test "normal Agent entry admits composed owners and their read cleanup" {
+test "normal Protean entry admits composed owners and their read cleanup" {
     try compile(false, false, false);
     try compile(false, true, false);
 }

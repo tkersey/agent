@@ -1,9 +1,9 @@
-//! A consumer owns all control. Agent only constructs ordinary dialogue terms.
+//! A consumer owns all control. Protean only constructs ordinary dialogue terms.
 const std = @import("std");
-const boundary = @import("boundary");
-const dialogue = boundary.library.generator;
+const horos = @import("horos");
+const dialogue = horos.library.generator;
 const interaction = @import("interaction");
-const bsrc = boundary.source;
+const bsrc = horos.source;
 const Builder = bsrc.Builder;
 const Id = bsrc.Id;
 
@@ -135,7 +135,7 @@ fn failure(b: *Builder) !Id {
     return b.term(.{ .fail = try b.constant(void, {}) });
 }
 
-fn arithmetic(b: *Builder, opcode: boundary.data.program.Opcode, a: Id, c: Id) !Id {
+fn arithmetic(b: *Builder, opcode: horos.data.program.Opcode, a: Id, c: Id) !Id {
     return b.value(.{ .schema = try b.scalar(u64), .expression = .{ .primitive = .{
         .opcode = opcode,
         .operands = &.{ a, c },
@@ -259,7 +259,7 @@ fn disposal(b: *Builder) !bsrc.Module {
     const read = try b.primitive(integer, .cell_get, &.{try b.reference(cell)}, 0);
     const answer = try b.variable(integer);
     try b.define(body, try b.bind(answer, try dialogue.offer(b, d, try b.reference(b.parameter(start_fn, 0)), read), try b.pure(try b.reference(answer))));
-    const exit = try boundary.library.cleanup.exitInfo(b, unit);
+    const exit = try horos.library.cleanup.exitInfo(b, unit);
     const cleanup = try b.declare(&.{exit}, unit, &.{release}, &.{region});
     try b.define(cleanup, try b.term(.{ .perform = .{ .effect = release, .payload = read } }));
     const body_type = try b.schema(.{ .internal = .{ .computation = .{
@@ -368,11 +368,11 @@ fn borrowedEscape(b: *Builder) !bsrc.Module {
 test "consumed dialogue future cannot be resumed" {
     var b = Builder.init(std.testing.allocator);
     defer b.deinit();
-    try std.testing.expectError(error.UnavailableSlot, boundary.program.compile(std.testing.allocator, try build(&b, .double_use)));
+    try std.testing.expectError(error.UnavailableSlot, horos.program.compile(std.testing.allocator, try build(&b, .double_use)));
 }
 
 test "borrowed dialogue future cannot escape creator region" {
     var b = Builder.init(std.testing.allocator);
     defer b.deinit();
-    try std.testing.expectError(error.InvalidOwnership, boundary.program.compile(std.testing.allocator, try build(&b, .borrowed_escape)));
+    try std.testing.expectError(error.InvalidOwnership, horos.program.compile(std.testing.allocator, try build(&b, .borrowed_escape)));
 }

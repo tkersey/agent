@@ -1,10 +1,10 @@
 //! Executable approval policy fixture independent of its environmental adapter.
 const std = @import("std");
-const agent = @import("agent");
-const boundary = @import("boundary");
-const source = boundary.source;
+const protean = @import("protean");
+const horos = @import("horos");
+const source = horos.source;
 const Id = source.Id;
-const contracts = agent.contracts;
+const contracts = protean.contracts;
 
 pub const Proposal = struct {
     operation: u32,
@@ -12,7 +12,7 @@ pub const Proposal = struct {
     replacement: contracts.Text(128),
     live_evidence: bool,
 };
-pub const Commit = agent.tools.CommitResult(Proposal, Proposal, u8, u8);
+pub const Commit = protean.tools.CommitResult(Proposal, Proposal, u8, u8);
 const Mode = enum {
     valid,
     scoped,
@@ -27,7 +27,7 @@ const Mode = enum {
     placement_commit,
 };
 
-pub fn build(c: agent.Context, mode: Mode) !source.Module {
+pub fn build(c: protean.Context, mode: Mode) !source.Module {
     if (mode == .scoped or mode == .scoped_evidence)
         return scopedApproval(c, mode == .scoped_evidence);
     const b = c.builder;
@@ -58,7 +58,7 @@ pub fn build(c: agent.Context, mode: Mode) !source.Module {
         try b.define(function, try b.pure(try b.constant(bool, true)));
         break :blk function;
     } else null;
-    const d = try agent.approval.define(c, .{
+    const d = try protean.approval.define(c, .{
         .name = "probe.document",
         .proposal = proposal,
         .occurrence = try b.scalar(u64),
@@ -74,13 +74,13 @@ pub fn build(c: agent.Context, mode: Mode) !source.Module {
     });
     const functions_before = b.functions.items.len;
     for (0..64) |_| {
-        const repeated = try agent.approval.define(c, d.config);
+        const repeated = try protean.approval.define(c, d.config);
         if (repeated.function != d.function or b.functions.items.len != functions_before)
             return error.UnsharedApprovalBody;
     }
     var incompatible = d.config;
     incompatible.principal = try b.scalar(u8);
-    try std.testing.expectError(error.InvalidApprovalContract, agent.approval.define(c, incompatible));
+    try std.testing.expectError(error.InvalidApprovalContract, protean.approval.define(c, incompatible));
     const entry_result = if (mode == .raw_commit) try c.schema(Commit) else d.result;
     const effects = if (witness) |w| (try (source.Row{ .effects = d.effects }).unionWith(b.allocator(), .{ .effects = &.{w.effect} })).effects else d.effects;
     const entry = try b.declare(&.{proposal}, entry_result, effects, &.{});
@@ -91,16 +91,16 @@ pub fn build(c: agent.Context, mode: Mode) !source.Module {
             .function = d.function,
             .arguments = &.{input},
         } }),
-        .valid, .speculative, .scoped, .scoped_evidence, .placement_read, .placement_commit => try agent.approval.approveAndCommit(c, d, entry, input),
+        .valid, .speculative, .scoped, .scoped_evidence, .placement_read, .placement_commit => try protean.approval.approveAndCommit(c, d, entry, input),
         .evidence, .forged_evidence, .reused_evidence => blk: {
             const w = witness.?;
-            try std.testing.expectError(error.LiveEvidenceRequired, agent.approval.approveAndCommit(c, d, entry, input));
+            try std.testing.expectError(error.LiveEvidenceRequired, protean.approval.approveAndCommit(c, d, entry, input));
             const proof = try b.variable(w.proof);
             const read = try b.term(.{ .call = .{ .function = w.read, .arguments = &.{} } });
             try c.registry.allowPrivateCall(entry, read, w.read);
             const acquire = if (mode == .forged_evidence) try b.pure(try b.primitive(w.proof, .resource_pack, &.{try b.constant(u64, 42)}, 0)) else read;
-            const first = try agent.approval.approveWithEvidence(c, d, entry, input, try b.reference(proof));
-            const next = if (mode == .reused_evidence) try b.bind(try b.variable(d.result), first, try agent.approval.approveWithEvidence(c, d, entry, input, try b.reference(proof))) else first;
+            const first = try protean.approval.approveWithEvidence(c, d, entry, input, try b.reference(proof));
+            const next = if (mode == .reused_evidence) try b.bind(try b.variable(d.result), first, try protean.approval.approveWithEvidence(c, d, entry, input, try b.reference(proof))) else first;
             break :blk try b.bind(proof, acquire, next);
         },
     };
@@ -112,11 +112,11 @@ pub fn build(c: agent.Context, mode: Mode) !source.Module {
 test "approval emits ordinary checked BPI3 with a consumed private grant" {
     var b = source.Builder.init(std.testing.allocator);
     defer b.deinit();
-    var registry = agent.admission.Registry.init(std.testing.allocator);
+    var registry = protean.admission.Registry.init(std.testing.allocator);
     defer registry.deinit();
     const module = try build(.{ .builder = &b, .registry = &registry }, .valid);
-    try agent.admission.verify(std.testing.allocator, module, &registry);
-    var compiled = try boundary.program.compile(std.testing.allocator, module);
+    try protean.admission.verify(std.testing.allocator, module, &registry);
+    var compiled = try horos.program.compile(std.testing.allocator, module);
     defer compiled.deinit();
     try std.testing.expectEqual(@as(usize, 1), module.resources.len);
     try std.testing.expect(compiled.program.functions.len > 1);
@@ -126,7 +126,7 @@ test "approval placement cannot hide ordinary I/O or commitment before final rev
     inline for (.{ Mode.placement_read, Mode.placement_commit }) |mode| {
         var b = source.Builder.init(std.testing.allocator);
         defer b.deinit();
-        var registry = agent.admission.Registry.init(std.testing.allocator);
+        var registry = protean.admission.Registry.init(std.testing.allocator);
         defer registry.deinit();
         try std.testing.expectError(error.InvalidApprovalPlacement, build(.{ .builder = &b, .registry = &registry }, mode));
     }
@@ -140,22 +140,22 @@ test "protected source rejects raw commit, stolen private call, and speculative 
     }) |scenario| {
         var b = source.Builder.init(std.testing.allocator);
         defer b.deinit();
-        var registry = agent.admission.Registry.init(std.testing.allocator);
+        var registry = protean.admission.Registry.init(std.testing.allocator);
         defer registry.deinit();
         const module = try build(.{ .builder = &b, .registry = &registry }, scenario[0]);
-        try std.testing.expectError(scenario[1], agent.admission.verify(std.testing.allocator, module, &registry));
+        try std.testing.expectError(scenario[1], protean.admission.verify(std.testing.allocator, module, &registry));
     }
 }
 
 test "tool metadata and dispatch share one declaration without granting commit" {
     var b = source.Builder.init(std.testing.allocator);
     defer b.deinit();
-    var registry = agent.admission.Registry.init(std.testing.allocator);
+    var registry = protean.admission.Registry.init(std.testing.allocator);
     defer registry.deinit();
-    const c: agent.Context = .{ .builder = &b, .registry = &registry };
+    const c: protean.Context = .{ .builder = &b, .registry = &registry };
     const integer = try b.scalar(u64);
     const read = try c.external("test.document.read", integer, integer, .read);
-    const descriptor: agent.tools.Descriptor = .{
+    const descriptor: protean.tools.Descriptor = .{
         .identity = "test.document.read",
         .payload = integer,
         .result = integer,
@@ -163,23 +163,23 @@ test "tool metadata and dispatch share one declaration without granting commit" 
         .role = .read,
         .model_offered = false,
     };
-    try agent.tools.validate(c, &.{descriptor});
-    _ = try agent.tools.perform(c, descriptor, try b.constant(u64, 0));
-    try std.testing.expectError(error.DuplicateToolDeclaration, agent.tools.validate(c, &.{ descriptor, descriptor }));
+    try protean.tools.validate(c, &.{descriptor});
+    _ = try protean.tools.perform(c, descriptor, try b.constant(u64, 0));
+    try std.testing.expectError(error.DuplicateToolDeclaration, protean.tools.validate(c, &.{ descriptor, descriptor }));
     var altered = descriptor;
     altered.identity = "other.document.read";
-    try std.testing.expectError(error.InvalidToolDeclaration, agent.tools.validate(c, &.{altered}));
+    try std.testing.expectError(error.InvalidToolDeclaration, protean.tools.validate(c, &.{altered}));
     const commit = try c.external("test.document.commit", integer, integer, .commit);
     altered = descriptor;
     altered.identity = "test.document.commit";
     altered.implementation = .{ .external = commit };
     altered.role = .commit;
-    try std.testing.expectError(error.ProtectedToolRequiresCheckedOwner, agent.tools.perform(c, altered, try b.constant(u64, 0)));
+    try std.testing.expectError(error.ProtectedToolRequiresCheckedOwner, protean.tools.perform(c, altered, try b.constant(u64, 0)));
 }
 
 const LiveWitness = struct { proof: Id, consume: Id, project: Id, read: Id, effect: Id };
 
-fn liveWitness(c: agent.Context, proposal: Id) !LiveWitness {
+fn liveWitness(c: protean.Context, proposal: Id) !LiveWitness {
     const b = c.builder;
     const integer = try b.scalar(u64);
     const effect = try c.external("agent.tool.document.read.version.v1", try b.scalar(void), integer, .read);
@@ -203,11 +203,11 @@ fn liveWitness(c: agent.Context, proposal: Id) !LiveWitness {
 test "required live proof stays private and is consumed before approval" {
     var b = source.Builder.init(std.testing.allocator);
     defer b.deinit();
-    var registry = agent.admission.Registry.init(std.testing.allocator);
+    var registry = protean.admission.Registry.init(std.testing.allocator);
     defer registry.deinit();
     const module = try build(.{ .builder = &b, .registry = &registry }, .evidence);
-    try agent.admission.verify(std.testing.allocator, module, &registry);
-    var compiled = try boundary.program.compile(std.testing.allocator, module);
+    try protean.admission.verify(std.testing.allocator, module, &registry);
+    var compiled = try horos.program.compile(std.testing.allocator, module);
     defer compiled.deinit();
     try std.testing.expectEqual(@as(usize, 2), compiled.program.scopes.resources.len);
 }
@@ -216,16 +216,16 @@ test "a simulated value cannot forge a live proof and a live proof cannot be use
     for ([_]Mode{ .forged_evidence, .reused_evidence }) |mode| {
         var b = source.Builder.init(std.testing.allocator);
         defer b.deinit();
-        var registry = agent.admission.Registry.init(std.testing.allocator);
+        var registry = protean.admission.Registry.init(std.testing.allocator);
         defer registry.deinit();
         const module = try build(.{ .builder = &b, .registry = &registry }, mode);
-        try agent.admission.verify(std.testing.allocator, module, &registry);
+        try protean.admission.verify(std.testing.allocator, module, &registry);
         const expected = if (mode == .reused_evidence) error.UnavailableSlot else error.InvalidOwnership;
-        try std.testing.expectError(expected, boundary.program.compile(std.testing.allocator, module));
+        try std.testing.expectError(expected, horos.program.compile(std.testing.allocator, module));
     }
 }
 
-fn scopedApproval(c: agent.Context, evidence: bool) !source.Module {
+fn scopedApproval(c: protean.Context, evidence: bool) !source.Module {
     const b = c.builder;
     const boolean = try b.scalar(bool);
     const integer = try b.scalar(u64);
@@ -241,7 +241,7 @@ fn scopedApproval(c: agent.Context, evidence: bool) !source.Module {
     const operation_result = try b.schema(.{ .sum = &.{ integer, integer, unit, unit } });
     const commit = try c.external("agent.tool.scoped.commit.v1", integer, operation_result, .commit);
     const witness = if (evidence) try liveWitness(c, integer) else null;
-    const d = try agent.approval.define(c, .{
+    const d = try protean.approval.define(c, .{
         .name = "probe.scoped",
         .proposal = integer,
         .occurrence = integer,
@@ -267,7 +267,7 @@ fn scopedApproval(c: agent.Context, evidence: bool) !source.Module {
     const created = try b.primitive(cell_type, .cell_new, &.{
         try b.reference(b.parameter(inside, 0)), try b.reference(b.parameter(root, 0)),
     }, 0);
-    const operation = if (witness) |w| try scopedEvidence(c, d, inside, w) else try agent.approval.approveAndCommit(c, d, inside, try b.constant(u64, 42));
+    const operation = if (witness) |w| try scopedEvidence(c, d, inside, w) else try protean.approval.approveAndCommit(c, d, inside, try b.constant(u64, 42));
     try b.define(inside, try b.bind(cell, try b.pure(created), operation));
     const inside_type = try b.schema(.{ .internal = .{ .computation = .{
         .parameters = &.{region_type},
@@ -280,12 +280,12 @@ fn scopedApproval(c: agent.Context, evidence: bool) !source.Module {
     return b.module(root, unit);
 }
 
-fn scopedEvidence(c: agent.Context, d: agent.approval.Definition, owner: Id, w: LiveWitness) !Id {
+fn scopedEvidence(c: protean.Context, d: protean.approval.Definition, owner: Id, w: LiveWitness) !Id {
     const b = c.builder;
     const proof = try b.variable(w.proof);
     const read = try b.term(.{ .call = .{ .function = w.read, .arguments = &.{} } });
     try c.registry.allowPrivateCall(owner, read, w.read);
-    const approve = try agent.approval.approveWithEvidence(
+    const approve = try protean.approval.approveWithEvidence(
         c,
         d,
         owner,
@@ -299,11 +299,11 @@ test "current policy may borrow a scoped cell across the approval interaction" {
     for ([_]Mode{ .scoped, .scoped_evidence }) |mode| {
         var b = source.Builder.init(std.testing.allocator);
         defer b.deinit();
-        var registry = agent.admission.Registry.init(std.testing.allocator);
+        var registry = protean.admission.Registry.init(std.testing.allocator);
         defer registry.deinit();
         const module = try build(.{ .builder = &b, .registry = &registry }, mode);
-        try agent.admission.verify(std.testing.allocator, module, &registry);
-        var compiled = try boundary.program.compile(std.testing.allocator, module);
+        try protean.admission.verify(std.testing.allocator, module, &registry);
+        var compiled = try horos.program.compile(std.testing.allocator, module);
         defer compiled.deinit();
         try std.testing.expectEqual(@as(Id, 1), compiled.program.scopes.region_count);
     }

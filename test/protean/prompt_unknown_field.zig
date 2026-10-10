@@ -1,7 +1,7 @@
-const agent = @import("agent");
+const protean = @import("protean");
 
 comptime {
-    _ = agent.prompt.literal(.{
+    _ = protean.prompt.literal(.{
         .role = .developer,
         .content = "Preserve declared instructions.",
         .contents = "An unknown field cannot be silently discarded.",

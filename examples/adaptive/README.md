@@ -1,11 +1,11 @@
-# Adaptive Agent
+# Protean
 
 This example runs one authored computation on the existing native host. The
 model can call `inference_set` and `skill_set`; the host admits their proposed
 next request before the computation commits the new control revision.
 
-This is Agent's supported application. It uses the reusable Zig authoring and
-native-host APIs; Boundary owns compiled control and World owns continuation.
+This is Protean's supported application. It uses the reusable Zig authoring and
+native-host APIs; Horos owns compiled control and Kronos owns continuation.
 
 Linux reference qualification uses recorded provider replies and controlled I/O.
 The [acceptance map](../../docs/adaptive-responses-acceptance.md) binds the current
@@ -13,9 +13,9 @@ obligations to proof surfaces and exact-head PR evidence.
 
 ## Author and build
 
-The reusable owners are `agent.adaptive_controls.defineInference`,
-`agent.adaptive_controls.defineSkill(P, ...)`, `P.declareAdaptive`, and
-`agent.responders.defineAdaptiveModelObserved`. They build ordinary Boundary
+The reusable owners are `protean.adaptive_controls.defineInference`,
+`protean.adaptive_controls.defineSkill(P, ...)`, `P.declareAdaptive`, and
+`protean.responders.defineAdaptiveModelObserved`. They build ordinary Horos
 computations and checked contracts. [`definition.zig`](definition.zig) composes
 them with this consumer's task, evidence, question, inbox and completion logic;
 [`types.zig`](types.zig) supplies its actions and ordinary schemas. Model choice,
@@ -23,21 +23,21 @@ skills, offers, budgets, epochs and next actions stay in that authored program.
 The native adapter realizes its explicit requests; it has no transcript-driven
 policy loop. See the [v6 API contract](../../docs/model-invocation-v6.md).
 
-From the Agent repository after the [native setup](../../docs/native-single-binary.md):
+From the Protean repository after the [native setup](../../docs/native-single-binary.md):
 
 ```sh
-zig build adaptive-agent -Doptimize=safe
+zig build protean -Doptimize=safe
 ```
 
-This produces the reference executable `zig-out/bin/adaptive-agent` and the
+This produces the reference executable `zig-out/bin/protean` and the
 identifiable program/contract outputs:
 
 ```text
-zig-out/agent4/adaptive-agent/program.bpi3
-zig-out/agent4/adaptive-agent/application.json
+zig-out/protean/adaptive/program.bpi3
+zig-out/protean/adaptive/application.json
 ```
 
-`zig build adaptive-agent-image` emits those program/contract outputs without
+`zig build protean-image` emits those program/contract outputs without
 building another application shell. The application metadata contains ordinary
 wire schemas and approved resource identities. Their meaning does not depend
 on an executable pathname or package layout.
@@ -52,11 +52,11 @@ public path used by downstream native hosts.
 ## Execute the compiled program
 
 ```sh
-./zig-out/bin/adaptive-agent describe-build
-./zig-out/bin/adaptive-agent demo --offline --state-dir ./adaptive-demo
+./zig-out/bin/protean describe-build
+./zig-out/bin/protean demo --offline --state-dir ./adaptive-demo
 ```
 
-The prebuilt reference embeds the same BPI3 and runs it through native World.
+The prebuilt reference embeds the same BPI3 and runs it through native Kronos.
 It does not execute `.zig` source or invoke a compiler, Node, Python or a helper
 service. Separate image and contract files are build/inspection outputs, not
 additional launch dependencies of this existing embedding. Exact image, assets,
@@ -72,10 +72,10 @@ production decision loop.
 A configured reference uses `validate --config FILE`, then:
 
 ```sh
-./zig-out/bin/adaptive-agent run --config ./approved-adaptive.json \
+./zig-out/bin/protean run --config ./approved-adaptive.json \
   --input-json '{"task":"Explain the entry point using source evidence."}' \
   --state-dir ./adaptive-task
-./zig-out/bin/adaptive-agent serve --transport stdio \
+./zig-out/bin/protean serve --transport stdio \
   --config ./approved-adaptive.json --state-dir ./adaptive-task
 ```
 
@@ -141,7 +141,7 @@ The adaptive model reply has a 16 KiB aggregate projection ceiling, independent
 of the 512 KiB raw response ceiling. An oversized projection returns a typed
 capacity result, retains its captured response and observed usage, and does not
 trigger another provider attempt. The full allowed combinations remain subject
-to the existing World, worker, object and namespace budgets.
+to the existing Kronos, worker, object and namespace budgets.
 
 The snapshot, skill bytes, catalog, profiles and limits are frozen into task
 resources. Reopening reads those bytes. Editing a configuration or Markdown
@@ -150,8 +150,8 @@ file cannot update a saved task; supply a new task for new authorization.
 ## Construct and reuse a pure tool
 
 The `tool-construction` skill exposes a frozen catalog of compiled BMO1
-components. `tool_build` links a bounded recipe with Boundary's data-only
-linker; `tool_run` executes the resulting BPI3 with native World. Neither invokes
+components. `tool_build` links a bounded recipe with Horos's data-only
+linker; `tool_run` executes the resulting BPI3 with native Kronos. Neither invokes
 the Zig compiler, another model, or a host interpreter for the recipe. Generated
 programs receive ordinary values and cannot perform external effects.
 
@@ -240,7 +240,7 @@ upper ceiling. Both enforce at most 16 instances, 64 bindings, an acyclic
 inter-instance graph, and 128-KiB catalog/image assets. Each task permits four
 physical build attempts and eight runs, including failed attempts and retries,
 within its existing twelve-work-call allowance. Runs admit 32-KiB values,
-one million cumulative World transitions, and a ten-second checked deadline;
+one million cumulative Kronos transitions, and a ten-second checked deadline;
 cancellation and time are checked between 256-transition quanta. The existing
 16-MiB worker allocation region also covers decoding, linking and publication.
 Limits intersect: an individually valid value can still exceed a combined
@@ -273,13 +273,13 @@ Resident deactivation retains its body and definitions but removes its offers.
 Unload advances the eviction revision and physically removes the owned skill
 injection and exclusive definitions. It removes opaque reasoning that could
 have observed that skill, retaining unrelated opaque output and ordinary
-evidence—even when evidence contains identical text. The Boundary computation
+evidence—even when evidence contains identical text. The Horos computation
 resumes with its existing task state, transcript and evidence references. Model
 changes retain visible messages and settled tool exchanges while excluding old
 opaque reasoning and old-profile effort updates. No task-state handoff bundle is
 constructed. Original captures remain immutable audit evidence.
 
-Work results and control receipts are immutable artifacts. World continuations
+Work results and control receipts are immutable artifacts. Kronos continuations
 retain references, not duplicated source excerpts or directory pages. The
 current model call's offered set is checked independently from materialized
 definitions, and work dispatch binds to that captured call. Queued user messages

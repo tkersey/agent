@@ -1,10 +1,10 @@
-const agent = @import("agent");
+const protean = @import("protean");
 
 comptime {
-    _ = agent.model(.{
+    _ = protean.model(.{
         .name = "invalid",
         .protocol = struct {
-            pub const semantic_identity = agent.model_invocation.protocol_identity;
+            pub const semantic_identity = protean.model_invocation.protocol_identity;
         },
         .model = "fixture-model",
         .parameters = .{ .provider_magic = @as(u32, 1) },

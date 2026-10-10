@@ -1,8 +1,8 @@
 //! Pure context construction with captured native allowance observations.
 //! Selection stays authored; native dispatch remains the authority for work.
 const std = @import("std");
-const native = @import("agent_native");
-const contracts = @import("agent_contracts");
+const native = @import("protean_native");
+const contracts = @import("protean_contracts");
 const t = @import("application_types");
 const P = t.P;
 const work = @import("work.zig");
@@ -219,7 +219,7 @@ fn evaluate(ctx: native.registry.ProjectionContext, input: t.Preparation) !Produ
             .maximum_provider_response_bytes = selected.response_bytes,
         },
     };
-    // Boundary retains the computation and task facts. Continue its immutable
+    // Horos retains the computation and task facts. Continue its immutable
     // transcript; only the projection owner changes provider-visible material.
     _ = try Adapter.prepare(ctx, try contracts.encodeOwned(P.AdaptiveRequest, a, request));
     var receipt_object: ?contracts.Bytes(128 * 1024) = null;

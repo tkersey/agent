@@ -1,7 +1,7 @@
-const agent = @import("agent");
+const protean = @import("protean");
 
 comptime {
-    _ = agent.skill(.{
+    _ = protean.skill(.{
         .id = "invalid",
         .description = "Reject unknown skill fields.",
         .instructions = "Preserve the declared skill.",

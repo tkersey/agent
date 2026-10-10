@@ -28,7 +28,7 @@ if (process.platform === 'darwin') {
   prefix = ['/usr/bin/sandbox-exec', '-f', profile];
 } else if (process.platform === 'linux') {
   prefix = ['/usr/bin/bwrap', '--unshare-user', '--die-with-parent', '--new-session', '--proc', '/proc', '--dev', '/dev', '--tmpfs', '/tmp'];
-  for (const path of ['/usr/lib', '/lib', '/lib64', '/etc/ssl', '/etc/resolv.conf', '/etc/hosts', '/etc/nsswitch.conf', '/usr/bin/tar', '/usr/bin/gzip', '/usr/bin/unzip', dirname(zig), library, root])
+  for (const path of ['/usr/lib', '/lib', '/lib64', '/etc/ssl', '/etc/resolv.conf', '/etc/hosts', '/etc/nsswitch.conf', '/usr/bin/tar', '/usr/bin/gzip', '/usr/bin/unzip', zig, library, root])
     if (existsSync(path)) prefix.push('--ro-bind', path, path);
   prefix.push('--bind', scratch, scratch);
   if (!cache.startsWith(scratch + '/')) prefix.push('--bind', cache, cache);

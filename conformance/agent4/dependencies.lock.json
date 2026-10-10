@@ -88,18 +88,18 @@
   },
   "world": {
     "repository": "tkersey/world",
-    "commit": "311d40836102344fbeb97158510fc9a71cb62343",
-    "gitTree": "128dd3f5191fad1fa62a1531c6aa8484d9d746b8",
+    "commit": "b4d9e55e713cab65020b0a34a1e2ae645e82cad6",
+    "gitTree": "57c1cd42a6325d8d6805740d7223401c9b81f221",
     "version": "6.0.0",
     "source": {
-      "inventorySha256": "015a882181505494222b453bd5af4460e32d944a8d1af53068254e58d2b85e12",
+      "inventorySha256": "ef69ab5c8ca559fb182e0ab59b941bc177ea6525603c08b80956f41a7edd20de",
       "entries": 111,
-      "bytes": 1452016
+      "bytes": 1451731
     },
     "archive": {
-      "url": "https://github.com/tkersey/world/archive/311d40836102344fbeb97158510fc9a71cb62343.tar.gz",
-      "bytes": 325453,
-      "sha256": "16e868aab187a42d537e86adad438dae506ae5a904fab1ec29241ea3dd5e2843"
+      "url": "https://github.com/tkersey/world/archive/b4d9e55e713cab65020b0a34a1e2ae645e82cad6.tar.gz",
+      "bytes": 325384,
+      "sha256": "94eb346c457dc2eb79b6bf2c29421483b3426aac8a07d7dacd16e61869ddd8f8"
     },
     "authentication": "Development successor source archive compared file-for-file and executable-bit-for-bit with the exact Git commit; complete normalized source inventory authenticated."
   },
@@ -113,7 +113,7 @@
   },
   "publicationObservation": {
     "boundarySource": "https://github.com/tkersey/boundary/pull/167 at b46285b8e171622e66d3616ffd9c15e209ea702e",
-    "worldSource": "https://github.com/tkersey/world/commit/311d40836102344fbeb97158510fc9a71cb62343",
+    "worldSource": "https://github.com/tkersey/world/pull/65 at b4d9e55e713cab65020b0a34a1e2ae645e82cad6",
     "compatiblePublishedReleaseObserved": false
   },
   "limitations": [

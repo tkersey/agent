@@ -21,8 +21,8 @@ async function within(promise, milliseconds, message) {
   try { return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(message)), milliseconds); })]); }
   finally { clearTimeout(timer); }
 }
-async function until(read, predicate) {
-  for (let n = 0; n < 400; n++) {
+async function until(read, predicate, maximum = 400) {
+  for (let n = 0; n < maximum; n++) {
     const value = await read(); if (predicate(value)) return value;
     assert(!['blocked', 'failed', 'unknown'].includes(value.status), `unexpected adaptive status ${JSON.stringify(value)}`);
     await delay(10);
@@ -34,6 +34,24 @@ function resultValue(bytes) {
   assert.equal(bytes.subarray(0, 8).toString(), 'ABL_ERS3');
   assert.equal(bytes.readBigUInt64LE(12), BigInt(bytes.length - 20));
   return Buffer.from(decodeValue(resultSchema, bytes.subarray(20))[1]);
+}
+function linkRecipe(stages) {
+  const instances = [], bindings = [];
+  const bind = (from, symbol, to) => bindings.push({required: {instance: from, symbol}, supplied: {instance: to, symbol: 'apply'}});
+  stages.forEach(([component_id, operation], index) => {
+    const key = `stage${index}`; instances.push({key, component_id});
+    if (operation) { instances.push({key: `operation${index}`, component_id: operation}); bind(key, component_id === 'map' ? 'row' : 'keep', `operation${index}`); }
+    if (index + 1 < stages.length) {
+      instances.push({key: `compose${index}`, component_id: 'compose'}); bind(`compose${index}`, 'first', key);
+      bind(`compose${index}`, 'second', index + 2 === stages.length ? `stage${index + 1}` : `compose${index + 1}`);
+    }
+  });
+  return {instances, bindings, entry: {instance: 'compose0', symbol: 'apply'}};
+}
+function strings(value) {
+  if (typeof value === 'string') return [value];
+  if (value && typeof value === 'object') return Object.values(value).flatMap(strings);
+  return [];
 }
 
 export async function verifyAdaptiveNative({app, applicationPath}) {
@@ -48,6 +66,7 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
   const requests = [], requestTimes = [], sockets = new Set();
   let providerFailure, announceHeld, releaseHeld;
   let scenario = 'trajectory', alternateIndex = 0, alternateRequests = 0, announceAlternate;
+  let toolSubject;
   const selectScenario = name => {
     scenario = name; alternateIndex = 0;
     return new Promise(resolve => { announceAlternate = resolve; });
@@ -59,6 +78,55 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
       const chunks = []; for await (const bytes of request) chunks.push(bytes);
       const bytes = Buffer.concat(chunks), body = JSON.parse(bytes);
       assert.equal(request.url, '/v1/responses'); assert.equal(request.headers.authorization, 'Bearer qualification-only');
+      if (scenario.startsWith('tools-')) {
+        const index = alternateIndex++, subject = toolSubject;
+        const offered = new Set(body.tool_choice.tools.map(tool => tool.name));
+        const output = call => {
+          const item = body.input.find(item => item.type === 'function_call_output' && item.call_id === `tools-${call}`);
+          assert(item, `missing acquired tool output ${call}`); return JSON.parse(item.output);
+        };
+        const skill = (operation, revision) => ['skill_set', {operation, skill_id: 'tool-construction', version: '1', residency: 'resident', expected_revision: revision, reason: 'Exercise checked composition and independent execution authority.'}];
+        if (index === 0) {
+          assert(!offered.has('tool_build')); assert(offered.has('tool_run'));
+          const marker = 'Authorized typed Table inputs: ', text = strings(body.input).find(text => text.includes(marker));
+          assert(text); subject.inputs = JSON.parse(text.slice(text.indexOf(marker) + marker.length));
+          assert.equal(subject.inputs.length, 2);
+        }
+        let call;
+        if (scenario === 'tools-disabled') {
+          call = index === 0 ? skill('load', 0) : index === 1 ? skill('unload', 1) : ['tool_build', {proposal_json: JSON.stringify(subject.recipe)}];
+          assert(index <= 2); if (index === 2) assert(!offered.has('tool_build'));
+        } else if (scenario === 'tools-foreign') {
+          call = index === 0 ? ['tool_run', {tool_ref: subject.foreign, input_ref: subject.inputs[0].input_ref}] : ['stop', {reason: 'The foreign task reference was not admitted.'}];
+          assert(index <= 1);
+          if (index === 1) { const result = output(0); assert.equal(result.disposition, 'rejected'); assert.equal(result.reason, 'UnauthorizedProgram'); }
+        } else if (scenario === 'tools-reverse') {
+          if (index === 0) call = skill('load', 0);
+          if (index === 1) call = ['tool_build', {proposal_json: JSON.stringify(subject.recipe)}];
+          if (index === 2) { const built = output(1); assert.equal(built.disposition, 'structurally_admitted'); subject.program = built.tool_ref; call = ['tool_run', {tool_ref: subject.program, input_ref: subject.inputs[0].input_ref}]; }
+          if (index === 3) { const result = output(2); assert.equal(result.disposition, 'completed'); assert.deepEqual(result.value.rows.map(row => [row.group, row.value]), [['3', '2'], ['4', '1']]); call = ['report', {summary: 'Three unsupported source records, grouped into counts two and one.', evidence_index: 0}]; }
+          assert(index <= 3);
+        } else {
+          if (index === 0) call = skill('load', 0);
+          if (index === 1) { assert(offered.has('tool_build')); call = ['tool_build', {proposal_json: JSON.stringify({...subject.recipe, pure: true})}]; }
+          if (index === 2) { assert.equal(output(1).disposition, 'rejected'); call = ['tool_build', {proposal_json: JSON.stringify(subject.recipe)}]; }
+          if (index === 3) { const built = output(2); assert.equal(built.disposition, 'structurally_admitted'); subject.program = built.tool_ref; call = ['tool_run', {tool_ref: subject.program, input_ref: subject.inputs[0].input_ref}]; }
+          if (index === 4) { const result = output(3); assert.equal(result.disposition, 'completed'); assert.deepEqual(result.value.rows.map(row => [row.id, row.status]), [['1', '1'], ['2', '2'], ['3', '3'], ['4', '4']]); call = ['ask', {question: 'The first audit is acquired. Continue with the second admitted input?'}]; }
+          if (index === 5) call = skill('deactivate', 1);
+          if (index === 6) call = skill('unload', 2);
+          if (index === 7) {
+            assert(!offered.has('tool_build')); assert(offered.has('tool_run'));
+            assert(strings(body.input).some(text => text.includes('Retained generated tool references') && text.includes(subject.program)));
+            call = ['tool_run', {tool_ref: subject.program, input_ref: subject.inputs[1].input_ref}];
+          }
+          if (index === 8) { const result = output(7); assert.equal(result.disposition, 'completed'); assert.equal(result.tool_ref, subject.program); assert.deepEqual(result.value.rows.map(row => [row.id, row.status]), [['80', '1']]); call = ['report', {summary: 'The same admitted program found agreement on the changed second input.', evidence_index: 1}]; }
+          assert(index <= 8);
+        }
+        assert(call);
+        response.writeHead(200, {'content-type': 'application/json'});
+        response.end(JSON.stringify({id: `tools-response-${index}`, status: 'completed', error: null, output: [{type: 'function_call', status: 'completed', call_id: `tools-${index}`, name: call[0], arguments: JSON.stringify(call[1])}]}));
+        return;
+      }
       if (scenario !== 'trajectory') {
         alternateRequests++;
         const index = alternateIndex++;
@@ -351,6 +419,61 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
       assert.deepEqual(await client.close(), {code: 0, signal: null}); client = null;
       cancellations.push({method, milliseconds, provider_requests: alternateIndex, recovered_status: unknown.status});
     }
+    const row = (id, key, value, group) => Object.fromEntries(Object.entries({id, key, value, group}).map(([name, value]) => [name, String(value)]));
+    const relation = [row(11, 10, 100, 1), row(12, 20, 201, 1), row(13, 40, 400, 2), row(14, 40, 401, 2), row(15, 90, 1, 3), row(16, 91, 1, 3), row(17, 92, 1, 4)];
+    const inputs = [
+      {id: 'first', description: 'Selected lock scope against source records, including agreement, mismatch, missing and ambiguity.', rows: [row(1, 10, 100, 1), row(2, 20, 200, 1), row(3, 30, 300, 2), row(4, 40, 400, 2), row(5, 50, 500, 3)], relation, selected: ['10', '20', '30', '40']},
+      {id: 'second', description: 'Changed lock scope and value: row 80 now agrees with key 20.', rows: [row(80, 20, 201, 9)], relation, selected: ['20']},
+    ];
+    const coverageRecipe = linkRecipe([['filter', 'selected'], ['map', 'join'], ['map', 'classify']]);
+    const reverseRecipe = linkRecipe([['filter', 'selected'], ['swap'], ['map', 'join'], ['filter', 'orphan'], ['group']]);
+    let retainedProgram, retainedState;
+    const toolRuns = [];
+    for (const name of ['tools-reuse', 'tools-reverse', 'tools-disabled', 'tools-foreign']) {
+      scenario = name; alternateIndex = 0;
+      toolSubject = {recipe: name === 'tools-reverse' ? reverseRecipe : coverageRecipe, foreign: retainedProgram};
+      let selectedState = name === 'tools-foreign' ? retainedState : join(app.data, name);
+      const selectedConfig = join(app.data, `${name}.json`);
+      await writeFile(selectedConfig, JSON.stringify({schema: 'adaptive-agent.configuration.v2', adaptive: {...config, skills: []}, tools: {build: name !== 'tools-foreign', run: true, inputs}}));
+      await launch(['--config', selectedConfig], selectedState);
+      const description = await client.call('describe');
+      const task = await client.call('task.submit', {client_operation_id: name, application_id: 'adaptive-agent', profile_id: description.profile.id,
+        input: {schema_id: 'adaptive-agent.input.v1', value: {task: name === 'tools-reverse' ? 'Group source records unsupported by the selected lock scope.' : 'Audit selected lock records against source records, retaining all classifications and reuse the tool on the second input.'}}});
+      if (name === 'tools-reuse') {
+        const waiting = await until(() => client.call('task.status', {task_id: task.task_id}), value => value.question != null, 2000);
+        if (providerFailure) throw providerFailure;
+        assert.equal(alternateIndex, 5);
+        app.signal(client.child, 'SIGKILL'); await client.closed; client = null;
+        const bundle = join(app.data, 'constructed-tool.bundle');
+        invoke('export-checkpoint', '--state-dir', selectedState, '--task-id', task.task_id, '--output', bundle);
+        selectedState = join(app.data, 'constructed tool imported');
+        assert.equal(invoke('import-checkpoint', '--state-dir', selectedState, '--input', bundle, '--operation-id', 'constructed-import').task_id, task.task_id);
+        await launch(['--profile-task', task.task_id], selectedState);
+        const reopened = await client.call('task.status', {task_id: task.task_id});
+        assert.deepEqual(reopened.question, waiting.question); assert.equal(alternateIndex, 5);
+        await client.call('task.resume', {client_operation_id: 'constructed-resume', task_id: task.task_id, expected_revision: reopened.revision});
+        await client.call('task.respond', {client_operation_id: 'constructed-answer', task_id: task.task_id, question_id: waiting.question.question_id,
+          question_revision: waiting.question.question_revision, request_digest: waiting.question.request_digest,
+          answer: {schema_id: waiting.question.answer_schema_id, value: {message: 'Continue on the second admitted input with the same generated program.'}}});
+      }
+      const result = await until(() => client.call('task.result', {task_id: task.task_id}), value => value.ready, 2000);
+      if (providerFailure) throw providerFailure;
+      if (name === 'tools-reuse' || name === 'tools-reverse') {
+        assert.equal(result.outcome.value.disposition, 'report');
+        assert.equal(result.outcome.value.programs.length, 1);
+        assert.equal(result.outcome.value.evidence[0].tag, 'generated');
+        const program = result.outcome.value.programs[0];
+        assert.equal(`${Buffer.from(program.digest).toString('hex')}:${program.bytes}`, toolSubject.program);
+        assert.deepEqual(result.outcome.value.evidence[0].value.program, program);
+      } else {
+        assert.equal(result.outcome.value.disposition, 'no_result');
+        assert.equal(result.outcome.value.programs.length, 0);
+        assert.equal(result.outcome.value.work_calls, name === 'tools-disabled' ? 0 : 1);
+      }
+      if (name === 'tools-reuse') { retainedProgram = toolSubject.program; retainedState = selectedState; assert.equal(alternateIndex, 9); assert.equal(result.outcome.value.control.skills.length, 0); }
+      toolRuns.push({scenario: name, provider_calls: alternateIndex, disposition: result.outcome.value.disposition});
+      assert.deepEqual(await client.close(), {code: 0, signal: null}); client = null;
+    }
     const measurements = measureAdaptive(asset, measurementRows, skillBodies, {archive_bytes: archiveBytes.length, archive_objects: archive.objects.size,
       namespace_object_bytes: [...archive.objects.values()].reduce((sum, bytes) => sum + bytes.length, 0),
       request_time_scope: 'controlled provider request-body acquisition to response send; includes deliberate first-request hold',
@@ -360,7 +483,7 @@ export async function verifyAdaptiveNative({app, applicationPath}) {
       held_ping_ms: pingMs, held_status_ms: statusMs, task_ms: trajectoryMilliseconds, archive_bytes: archiveBytes.length,
       independent_negative_provider_requests: alternateRequests,
       provider_projections: providerProjections, context_projections: controlProjections, work_projections: workProjections,
-      consumed_messages: 3, not_consumed_messages: 1, disabled_offer_rejected: offeredWitness, cancellations,
+      consumed_messages: 3, not_consumed_messages: 1, disabled_offer_rejected: offeredWitness, cancellations, tool_construction: toolRuns,
       layout_comparison: measurements.comparison.map(({policy, total_request_bytes, summed_local_visible_prefix_bytes, actual_execution, hard_eviction}) =>
         ({policy, total_request_bytes, summed_local_visible_prefix_bytes, actual_execution, hard_eviction})), live_provider: false}));
   } finally {

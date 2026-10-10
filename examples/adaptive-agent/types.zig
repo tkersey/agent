@@ -35,7 +35,10 @@ pub const Action = union(enum) {
     inference_set: controls.InferenceSet,
     skill_set: controls.SkillSet,
     inspect: struct { evidence_index: u64 },
-    tool_build: struct { proposal_json: contracts.Text(8192) },
+    // The inherited 16-KiB argument envelope reserves worst-case JSON escaping.
+    // Native construction's 8-KiB ceiling remains an upper bound, not a promise
+    // that every such string fits this stricter model interface.
+    tool_build: struct { proposal_json: contracts.Text(2700) },
     tool_run: struct { tool_ref: contracts.Text(96), input_ref: contracts.Text(96) },
 };
 pub const P = model.Profile(Action, .{

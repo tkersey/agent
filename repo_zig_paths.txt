@@ -113,5 +113,6 @@ test/agent4/skill_unknown_field.zig
 test/agent4/values.zig
 test/authoring_tests.zig
 test/consumers/adaptive/build.zig
+tools/native/build_entry.zig
 tools/native/dependencies.zig
 tools/native/emit.zig

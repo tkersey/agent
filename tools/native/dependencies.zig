@@ -42,7 +42,13 @@ const Context = struct {
     }
     fn digest(c: Context, bytes: []const u8) ![]const u8 {
         var hash: [32]u8 = undefined;
-        std.crypto.hash.sha2.Sha256.hash(bytes, &hash, .{});
+        if (comptime @hasDecl(@import("root"), "native_hash")) {
+            const optimized = @import("root").native_hash;
+            var state: optimized.State = undefined;
+            optimized.agent_native_sha256_init(&state);
+            optimized.agent_native_sha256_update(&state, bytes.ptr, bytes.len);
+            optimized.agent_native_sha256_final(&state, &hash);
+        } else std.crypto.hash.sha2.Sha256.hash(bytes, &hash, .{});
         return c.a.dupe(u8, &std.fmt.bytesToHex(hash, .lower));
     }
     fn fileDigest(c: Context, path: []const u8) ![]const u8 {
@@ -60,6 +66,12 @@ const Context = struct {
         try object.object.put(c.a, key, try c.value(input));
     }
 };
+
+fn sha3(bytes: []const u8, output: *[32]u8) void {
+    if (comptime @hasDecl(@import("root"), "native_hash")) {
+        @import("root").native_hash.agent_native_sha3_256(bytes.ptr, bytes.len, output);
+    } else std.crypto.hash.sha3.Sha3_256.hash(bytes, output, .{});
+}
 
 fn stable(a: std.Io.File.Stat, b: std.Io.File.Stat) bool {
     return a.inode == b.inode and a.size == b.size and a.kind == b.kind and
@@ -220,7 +232,7 @@ fn verifySqlite(c: Context, path: []const u8, lock_path: []const u8) !Value {
         try equal(try c.digest(bytes), try text(expected, "sha256"));
         if (comptime std.mem.eql(u8, name, "sqlite3.c")) {
             var hash: [32]u8 = undefined;
-            std.crypto.hash.sha3.Sha3_256.hash(bytes, &hash, .{});
+            sha3(bytes, &hash);
             try equal(&std.fmt.bytesToHex(hash, .lower), try text(sqlite, "amalgamationSha3_256"));
         } else {
             const license = try c.read(try c.join(&.{ path, "LICENSE" }), 65536);
@@ -478,7 +490,7 @@ fn sqliteAt(c: Context, parent: []const u8, lock_path: []const u8, offline: bool
     const transport = try c.join(&.{ parent, try std.fmt.allocPrint(c.a, "{s}.zip", .{try text(expected, "root")}) });
     const archive_bytes = try archiveAt(c, transport, expected, offline);
     var hash: [32]u8 = undefined;
-    std.crypto.hash.sha3.Sha3_256.hash(archive_bytes, &hash, .{});
+    sha3(archive_bytes, &hash);
     try equal(&std.fmt.bytesToHex(hash, .lower), try text(expected, "sha3_256"));
     const stage = try stageDirectory(c, parent);
     defer Dir.cwd().deleteTree(c.io, stage) catch {};

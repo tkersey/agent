@@ -81,9 +81,23 @@ pub fn build(b: *std.Build) void {
     });
     const host_tool = b.addExecutable(.{
         .name = "agent-native-build",
-        .root_module = b.createModule(.{ .root_source_file = b.path("tools/native/dependencies.zig"), .target = b.graph.host, .optimize = .safe }),
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tools/native/build_entry.zig"),
+            .target = b.graph.host,
+            .optimize = .safe,
+            .imports = &.{.{ .name = "hash_abi", .module = b.createModule(.{ .root_source_file = b.path("runtime/native/hash_abi.zig"), .target = b.graph.host, .optimize = .safe }) }},
+        }),
         .use_llvm = if (b.graph.host.result.os.tag == .linux and b.graph.host.result.cpu.arch == .x86_64) false else null,
     });
+    // Keep the driver on its existing backend and reuse the optimized primitive
+    // without linking SQLite or any dependency that this driver must first admit.
+    const build_hash = b.addLibrary(.{
+        .name = "agent-build-hash",
+        .linkage = .static,
+        .root_module = b.createModule(.{ .root_source_file = b.path("runtime/native/hash.zig"), .target = b.graph.host, .optimize = .safe }),
+        .use_llvm = true,
+    });
+    host_tool.root_module.linkLibrary(build_hash);
     const source_guard = b.addRunArtifact(host_tool);
     source_guard.addArg("verify-boundary");
     source_guard.addFileArg2(b.path("conformance/agent4/dependencies.lock.json"), .{});

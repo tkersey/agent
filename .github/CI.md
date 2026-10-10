@@ -83,6 +83,9 @@ Zig admission/metadata tool. Emitters use the build host; a target executable is
 never run to produce metadata. SQLite and the native C bridge share one static
 library per target ABI. Linux keeps the accepted self-hosted compiler backend;
 C compilation and its existing optimization flags are unchanged.
+The build driver shares the existing optimized standard-library hash primitive
+through its private ABI. The standalone bootstrap remains standard-library-only;
+source admission, both compiler/library identity passes and license checks remain.
 
 Compiler caches use ordinary CI filesystem operations to save
 useful compiler objects without deleting local outputs. They reject unsupported

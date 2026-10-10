@@ -54,7 +54,13 @@ test "adaptive unload capture recovers under its original plan without another a
     var service = try native.tasks.Service(t).init(a, io, &namespace, assets, &application, handlers, profile);
     var service_live = true;
     defer if (service_live) service.close(a) catch unreachable;
-    const task = (try service.submit(permanent, "adaptive-recovery-submit", environment.demo_input)).receipt.task;
+    // Large admitted task/input text must survive transcript continuation,
+    // including captured-before-interpreted recovery.
+    const long_task: [2048]u8 = @splat('T');
+    const long_followup: [2048]u8 = @splat('F');
+    const task = (try service.submit(permanent, "adaptive-recovery-submit", .{ .task = .{ .bytes = &long_task } })).receipt.task;
+    _ = try service.message(permanent, "large-followup-one", task, .{ .message = .{ .bytes = &long_followup } });
+    _ = try service.message(permanent, "large-followup-two", task, .{ .message = .{ .bytes = &long_followup } });
     var model_calls: usize = 0;
     var restarted = false;
     var witnessed = false;
@@ -111,6 +117,26 @@ test "adaptive unload capture recovers under its original plan without another a
             const context: native.Context = .{ .allocator = frame, .io = io, .authority = &profile.authority, .task_id = "adaptive-unit", .profile = profile.bytes, .environment = profile.environment };
             const reply = if (work.entry.declaration.capture) |adapter| blk: {
                 maximum_prepared = @max(maximum_prepared, work.prepared.?.len);
+                if (work.entry.declaration.inference and model_calls == 8) {
+                    var prepared = try agent.contracts.decodeOwned(t.P.AdaptivePrepared, frame, work.prepared.?);
+                    defer prepared.deinit();
+                    const rendered = try native.json.parse(frame, prepared.value.body.bytes, .{});
+                    var task_count: usize = 0;
+                    var followup_count: usize = 0;
+                    for (rendered.value.object.get("input").?.array.items) |item| {
+                        const content = native.json.get(item, "content") orelse continue;
+                        if (content != .array) continue;
+                        for (content.array.items) |part| {
+                            const text = native.json.get(part, "text") orelse continue;
+                            if (text != .string) continue;
+                            if (std.mem.eql(u8, text.string, &long_task)) task_count += 1;
+                            if (std.mem.eql(u8, text.string, &long_followup)) followup_count += 1;
+                        }
+                    }
+                    try std.testing.expect(prepared.value.body.bytes.len > 8192);
+                    try std.testing.expectEqual(@as(usize, 1), task_count);
+                    try std.testing.expectEqual(@as(usize, 2), followup_count);
+                }
                 const acquired = try adapter.acquire(context, work.prepared.?);
                 if (acquired != .captured) return error.UnexpectedAcquisitionFailure;
                 break :blk acquired.captured;
@@ -146,6 +172,18 @@ test "adaptive unload capture recovers under its original plan without another a
     }
     try std.testing.expect(witnessed and finished);
     try std.testing.expectEqual(14, model_calls);
+    // Archive validation must release each replay's scratch memory even when
+    // the CLI supplies an arena for the enclosing request.
+    {
+        const execution_limit = budget.limit;
+        budget.limit = 32 * 1024 * 1024;
+        defer budget.limit = execution_limit;
+        var frame_arena = std.heap.ArenaAllocator.init(a);
+        defer frame_arena.deinit();
+        const archive_path = try std.fmt.allocPrint(permanent, "{s}/completed.archive", .{buffer[0..length]});
+        const exported = try service.exportCheckpoint(frame_arena.allocator(), task, archive_path);
+        try std.testing.expect(exported.bytes > 0);
+    }
     std.debug.print("adaptive capture recovery: model_acquisitions={d} state_bytes_peak={d} prepared_bytes_peak={d} projection_and_step_scratch_peak={d} requested_memory_peak={d}\n", .{ model_calls, maximum_state, maximum_prepared, maximum_scratch, budget.peak });
     try service.close(a);
     service_live = false;

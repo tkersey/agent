@@ -181,7 +181,7 @@ test "adaptive admission binds selected profiles and skill permissions to the fr
         .invocation = request().invocation,
         .policy = digest(policy_bytes),
         .selection = .{ .profile_id = inference.id, .profile_digest = try Admission.profileDigest(a, inference), .effective_effort = .medium, .control_revision = 1 },
-        .plan = .{ .epoch = 0, .reason = .initial, .watermark = 1, .eviction_generation = 0, .prior = null, .handoff = null, .catalog = policy.catalog, .skills = .{ .items = &materialization } },
+        .plan = .{ .epoch = 0, .reason = .initial, .watermark = 1, .eviction_generation = 0, .prior = null, .catalog = policy.catalog, .skills = .{ .items = &materialization } },
         .materialized = .{true},
         .offered = .{true},
         .results = .{ .items = &.{} },

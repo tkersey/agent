@@ -798,7 +798,6 @@ test "adaptive responder keeps definitions separate from original call authority
                 .watermark = 12,
                 .eviction_generation = 2,
                 .prior = null,
-                .handoff = .{ .digest = @splat(4), .bytes = 128 },
                 .catalog = .{ .digest = @splat(5), .bytes = 256 },
                 .skills = .{ .items = &.{} },
             },

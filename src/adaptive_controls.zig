@@ -329,7 +329,7 @@ fn SkillGenerator(comptime P: type) type {
             const successor = try e.replace(room, State, state, .{
                 .selection = try e.replace(room, model.AdaptiveSelection, selection, .{ .control_revision = try e.increment(room, revision) }),
                 .skills = skills,
-                .top_effort = try room.select(removed, try e.field(room, selection, model.AdaptiveSelection, "effective_effort"), try e.field(room, state, State, "top_effort")),
+                .top_effort = try e.field(room, state, State, "top_effort"),
                 .epoch = try room.select(removed, try e.increment(room, epoch), epoch),
                 .epoch_reason = try room.select(removed, try e.literal(room, model.EpochReason, .eviction), try e.field(room, state, State, "epoch_reason")),
                 .eviction_generation = try room.select(removed, try e.increment(room, generation), generation),

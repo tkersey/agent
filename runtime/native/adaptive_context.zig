@@ -1,5 +1,5 @@
 //! Deterministic input projection. Original captures remain immutable; epochs
-//! explicitly replace replay with an admitted authored semantic handoff.
+//! preserve ordered replay while revising only incompatible or evicted material.
 const std = @import("std");
 const contracts = @import("agent_contracts");
 const registry = @import("registry.zig");
@@ -62,6 +62,8 @@ pub fn Projection(comptime P: type) type {
         pub const Rendered = struct {
             /// Committed events, without the transient material of this call.
             history: json.Value,
+            origins: std.ArrayList(P.ContextOrigin),
+            reasoning_skills: u32,
             /// Exact chronological provider input, including transient suffix.
             input: json.Value,
             core_tools: json.Value,
@@ -87,10 +89,6 @@ pub fn Projection(comptime P: type) type {
             ctx.allocator.free(raw);
             const prepared = try read(ctx, value.source_request, 2 * 1024 * 1024);
             ctx.allocator.free(prepared);
-            if (value.plan.handoff) |ref| {
-                const seed = try read(ctx, ref, 128 * 1024);
-                ctx.allocator.free(seed);
-            }
             return decoded;
         }
 
@@ -195,17 +193,107 @@ pub fn Projection(comptime P: type) type {
             return calls;
         }
 
+        fn ordinal(name: []const u8) !usize {
+            for (P.allDeclarations().items, 0..) |declaration, index| if (equal(name, declaration.name.bytes)) return index;
+            return error.InvalidContext;
+        }
+
+        fn fillOrigins(a: std.mem.Allocator, origins: *std.ArrayList(P.ContextOrigin), count: usize, watermark: u64) !void {
+            while (origins.items.len < count) try origins.append(a, .{ .watermark = watermark });
+        }
+
+        pub fn effectiveEffort(input: json.Value, top: @FieldType(@FieldType(P.AdaptiveRequest, "selection"), "effective_effort")) !@TypeOf(top) {
+            if (input != .array) return error.InvalidContext;
+            var effective = top;
+            for (input.array.items) |item| if (kind(item, "configuration_update")) {
+                effective = std.meta.stringToEnum(@TypeOf(top), try json.text(try field(try field(item, "reasoning"), "effort"))) orelse return error.InvalidContext;
+            };
+            return effective;
+        }
+
+        fn stripMarker(item: *json.Value) void {
+            const key: []const u8 = if (kind(item.*, "function_call_output")) "output" else "content";
+            if (item.object.getPtr(key)) |parts| if (parts.* == .array) {
+                for (parts.array.items) |*part| if (part.* == .object) {
+                    _ = part.object.swapRemove("prompt_cache_breakpoint");
+                };
+            };
+        }
+
+        /// Retain ordinary history and complete exchanges. Ownership metadata
+        /// identifies injected bodies; equal text in acquired evidence is not
+        /// an injection. Only opaque output that could have seen an evicted
+        /// skill is excluded. A profile switch excludes all old opaque output
+        /// and effort updates, without relabeling either for the new profile.
+        fn revise(ctx: registry.ProjectionContext, history: *json.Value, origins: *std.ArrayList(P.ContextOrigin), old: P.AdaptiveContext, request: P.AdaptiveRequest, catalog: P.AdaptiveCatalog, explicit_cache: bool) !void {
+            const a = ctx.allocator;
+            const changed_profile = !equal(&old.selection.profile_digest, &request.selection.profile_digest);
+            var removed_skills: u32 = 0;
+            for (old.plan.skills.items) |skill| {
+                var retained = false;
+                for (request.plan.skills.items) |next| if (sameSkill(skill, next)) {
+                    retained = !(skill.residency == .transient and skill.active and !next.active);
+                };
+                if (!retained) for (catalog.skills.items, 0..) |entry, index| {
+                    if (equal(entry.id.bytes, skill.skill_id.bytes)) removed_skills |= @as(u32, 1) << @intCast(index);
+                };
+            }
+            var kept = list(a);
+            var kept_origins: std.ArrayList(P.ContextOrigin) = .empty;
+            var changed = false;
+            for (history.array.items, origins.items) |value, origin| {
+                var item = value;
+                var retain = true;
+                if (origin.resident_skill) |index| {
+                    if (index >= catalog.skills.items.len) return error.InvalidContext;
+                    retain = false;
+                    for (request.plan.skills.items) |skill| if (skill.residency == .resident and
+                        equal(skill.skill_id.bytes, catalog.skills.items[index].id.bytes) and skill.introduced_at == origin.watermark)
+                    {
+                        retain = true;
+                    };
+                }
+                var removed_definition = false;
+                for (origin.reasoning_tools, request.materialized) |seen, defined| removed_definition = removed_definition or (seen and !defined);
+                if (kind(item, "reasoning") and (changed_profile or origin.reasoning_skills & removed_skills != 0 or removed_definition)) retain = false;
+                if (kind(item, "configuration_update") and changed_profile) retain = false;
+                if (kind(item, "additional_tools")) {
+                    const original = try field(item, "tools");
+                    var tools = list(a);
+                    for (original.array.items) |definition| if (request.materialized[try ordinal(try json.text(try field(definition, "name")))]) {
+                        try tools.array.append(definition);
+                    };
+                    if (tools.array.items.len != original.array.items.len) {
+                        changed = true;
+                        if (tools.array.items.len == 0) retain = false else try json.put(a, &item, "tools", tools);
+                    }
+                }
+                if (!retain) {
+                    changed = true;
+                    continue;
+                }
+                // After a necessary edit, old suffix breakpoints describe new
+                // prefixes. Keep eligible markers before the edit and select
+                // one current suffix boundary below instead of rewriting all.
+                if (changed or !explicit_cache) stripMarker(&item);
+                try kept.array.append(item);
+                try kept_origins.append(a, origin);
+            }
+            history.* = kept;
+            origins.* = kept_origins;
+        }
+
         pub fn render(ctx: registry.ProjectionContext, request: P.AdaptiveRequest, frozen: P.AdaptivePolicy, selected: Admission.Selected, catalog: P.AdaptiveCatalog) !Rendered {
             const a = ctx.allocator;
             var history = list(a);
+            var origins: std.ArrayList(P.ContextOrigin) = .empty;
             var previous: ?contracts.Decoded(P.AdaptiveContext) = null;
             defer if (previous) |*saved| saved.deinit();
             var same_epoch = false;
+            var same_profile = false;
             var new_start: usize = 0;
             if (request.plan.prior) |ref| {
                 previous = try open(ctx, ref, frozen.audience.bytes);
-                // Audit parents remain required even across an eviction. Free
-                // each decoded predecessor before opening the next one.
                 var parent = previous.?.value.plan.prior;
                 var watermark = previous.?.value.plan.watermark;
                 var depth: usize = 1;
@@ -226,35 +314,34 @@ pub fn Projection(comptime P: type) type {
                 const old = previous.?.value;
                 if (request.plan.watermark != old.watermark or request.selection.control_revision < old.selection.control_revision) return error.InvalidContext;
                 same_epoch = request.plan.epoch == old.plan.epoch;
+                same_profile = equal(&request.selection.profile_digest, &old.selection.profile_digest);
                 const removing = excluded(old, request);
                 if (same_epoch) {
-                    if (removing or request.plan.eviction_generation != old.plan.eviction_generation or
-                        !equal(&request.selection.profile_digest, &old.selection.profile_digest) or
+                    if (removing or request.plan.eviction_generation != old.plan.eviction_generation or !same_profile or
                         request.invocation.parameters.reasoning.?.effort.? != old.top_effort or
-                        !same(request.plan.handoff, old.plan.handoff) or request.plan.reason != old.plan.reason) return error.InvalidContext;
-                    history = (try json.parse(a, old.items.bytes, .{ .bytes = 2 * 1024 * 1024 })).value;
-                    new_start = history.array.items.len;
+                        request.plan.reason != old.plan.reason) return error.InvalidContext;
                 } else {
                     if (request.plan.epoch != try std.math.add(u64, old.plan.epoch, 1) or
                         request.plan.eviction_generation != try std.math.add(u64, old.plan.eviction_generation, @intFromBool(removing))) return error.InvalidContext;
-                    const seed_ref = request.plan.handoff orelse return error.MissingHandoff;
-                    const bytes = try read(ctx, seed_ref, 128 * 1024);
-                    defer a.free(bytes);
-                    var seed = try contracts.decodeOwned(P.AdaptiveSeed, a, bytes);
-                    defer seed.deinit();
-                    const value = seed.value;
-                    if (!equal(value.schema.bytes, P.adaptive_seed_identity) or !equal(&value.policy, &request.policy) or !equal(&value.task, &ctx.task) or
-                        !equal(value.tenant.bytes, ctx.tenant) or !equal(value.audience.bytes, frozen.audience.bytes) or
-                        !try encodedEqual(a, @FieldType(P.AdaptiveSeed, "selection"), value.selection, request.selection) or value.epoch != request.plan.epoch or value.watermark != request.plan.watermark or
-                        value.eviction_generation != request.plan.eviction_generation or !try encodedEqual(a, Ref, value.source, ref) or value.messages.items.len == 0) return error.InvalidContext;
-                    // The old exchange must be settled even when represented by
-                    // a handoff; a reset cannot discard an outstanding call.
-                    var old_history = (try json.parse(a, old.items.bytes, .{ .bytes = 2 * 1024 * 1024 })).value;
-                    try settle(a, &old_history, request, selected.profile.explicit_cache);
-                    for (value.messages.items, 0..) |item, index| try history.array.append(try message(a, @tagName(item.role), try a.dupe(u8, item.content.bytes), selected.profile.explicit_cache and index == 0));
+                    if (same_profile and request.plan.reason == .eviction and request.invocation.parameters.reasoning.?.effort.? != old.top_effort) return error.InvalidContext;
                 }
-            } else if (request.plan.epoch != 0 or request.plan.watermark != 0 or request.plan.eviction_generation != 0 or request.plan.handoff != null or request.plan.reason != .initial) return error.InvalidContext;
-            if (same_epoch or previous == null) try settle(a, &history, request, selected.profile.explicit_cache);
+                history = (try json.parse(a, old.items.bytes, .{ .bytes = 2 * 1024 * 1024 })).value;
+                if (old.origins.items.len != history.array.items.len) return error.InvalidContext;
+                for (old.origins.items) |origin| if (origin.watermark > old.plan.watermark) return error.InvalidContext;
+                try origins.appendSlice(a, old.origins.items);
+                new_start = history.array.items.len;
+                try settle(a, &history, request, selected.profile.explicit_cache);
+                try fillOrigins(a, &origins, history.array.items.len, request.plan.watermark);
+                if (!same_epoch) {
+                    try revise(ctx, &history, &origins, old, request, catalog, selected.profile.explicit_cache);
+                    new_start = 0;
+                    while (new_start < origins.items.len and origins.items[new_start].watermark < request.plan.watermark) new_start += 1;
+                }
+            } else {
+                if (request.plan.epoch != 0 or request.plan.watermark != 0 or request.plan.eviction_generation != 0 or request.plan.reason != .initial) return error.InvalidContext;
+                try settle(a, &history, request, selected.profile.explicit_cache);
+                try fillOrigins(a, &origins, history.array.items.len, request.plan.watermark);
+            }
             if (same_epoch and request.selection.effective_effort != previous.?.value.selection.effective_effort) {
                 if (!selected.profile.effort_update) return error.IncompatibleProfile;
                 if (history.array.items.len != 0 and kind(history.array.items[history.array.items.len - 1], "configuration_update")) return error.InvalidContext;
@@ -264,29 +351,29 @@ pub fn Projection(comptime P: type) type {
                 try json.put(a, &update, "type", json.string("configuration_update"));
                 try json.put(a, &update, "reasoning", reasoning);
                 try history.array.append(update);
-            } else if (!same_epoch and request.invocation.parameters.reasoning.?.effort.? != request.selection.effective_effort) return error.IncompatibleProfile;
+            }
+            const effective = try effectiveEffort(history, request.invocation.parameters.reasoning.?.effort.?);
+            if (effective != request.selection.effective_effort) return error.IncompatibleProfile;
             for (request.invocation.messages.items, 0..) |item, index| try history.array.append(try message(a, @tagName(item.role), item.content.bytes, selected.profile.explicit_cache and previous == null and index == 0));
+            try fillOrigins(a, &origins, history.array.items.len, request.plan.watermark);
             var defined = frozen.core_tools;
             var core = list(a);
             for (frozen.core_tools, P.allDeclarations().items) |enabled, declaration| if (enabled) try core.array.append(try tool(a, declaration));
-            if (same_epoch) for (previous.?.value.plan.skills.items) |loaded| for (catalog.skills.items) |entry| {
-                if (equal(loaded.skill_id.bytes, entry.id.bytes)) for (entry.tools, 0..) |enabled, index| {
-                    defined[index] = defined[index] or enabled;
-                };
+            for (history.array.items) |item| if (kind(item, "additional_tools")) {
+                if (!selected.profile.additional_tools) return error.IncompatibleProfile;
+                for ((try field(item, "tools")).array.items) |definition| defined[try ordinal(try json.text(try field(definition, "name")))] = true;
             };
             for (request.plan.skills.items) |loaded| {
-                var retained = false;
-                if (same_epoch) for (previous.?.value.plan.skills.items) |old| {
-                    retained = retained or sameSkill(old, loaded);
+                var index: ?u8 = null;
+                for (catalog.skills.items, 0..) |entry, i| if (equal(loaded.skill_id.bytes, entry.id.bytes)) {
+                    index = @intCast(i);
                 };
-                if (retained) continue;
+                const skill_index = index orelse return error.InvalidContext;
                 var additions = list(a);
-                for (catalog.skills.items) |entry| if (equal(entry.id.bytes, loaded.skill_id.bytes)) {
-                    for (entry.tools, 0..) |enabled, index| {
-                        if (enabled and !defined[index]) try additions.array.append(try tool(a, P.allDeclarations().items[index]));
-                        defined[index] = defined[index] or enabled;
-                    }
-                };
+                for (catalog.skills.items[skill_index].tools, 0..) |enabled, i| {
+                    if (enabled and !defined[i]) try additions.array.append(try tool(a, P.allDeclarations().items[i]));
+                    defined[i] = defined[i] or enabled;
+                }
                 if (additions.array.items.len != 0) {
                     if (!selected.profile.additional_tools) return error.IncompatibleProfile;
                     var addition = json.object();
@@ -294,25 +381,34 @@ pub fn Projection(comptime P: type) type {
                     try json.put(a, &addition, "role", json.string("developer"));
                     try json.put(a, &addition, "tools", additions);
                     try history.array.append(addition);
+                    try fillOrigins(a, &origins, history.array.items.len, request.plan.watermark);
                 }
-                if (loaded.residency == .resident) {
+                var retained = false;
+                for (origins.items) |origin| if (origin.resident_skill == skill_index and origin.watermark == loaded.introduced_at) {
+                    retained = true;
+                };
+                if (loaded.residency == .resident and !retained) {
                     const body = try read(ctx, loaded.resource, 32 * 1024);
                     try history.array.append(try message(a, "developer", body, false));
+                    try origins.append(a, .{ .watermark = loaded.introduced_at, .resident_skill = skill_index });
                 }
             }
-            // At most two newly selected writes: the immutable epoch core and
-            // the latest newly appended eligible content. Old markers remain
-            // at their original positions; transient suffixes are added later.
             if (selected.profile.explicit_cache) try markLatest(a, &history, new_start);
-            // Copy only the item vector: elements are immutable region values.
             var input = list(a);
             try input.array.appendSlice(history.array.items);
             for (request.plan.skills.items) |loaded| if (loaded.residency == .transient and loaded.active) {
                 const body = try read(ctx, loaded.resource, 32 * 1024);
                 try input.array.append(try message(a, "developer", body, false));
             };
+            var reasoning_skills: u32 = 0;
+            for (origins.items) |origin| reasoning_skills |= origin.reasoning_skills;
+            for (request.plan.skills.items) |loaded| if (loaded.residency == .resident or loaded.active) {
+                for (catalog.skills.items, 0..) |entry, index| if (equal(entry.id.bytes, loaded.skill_id.bytes)) {
+                    reasoning_skills |= @as(u32, 1) << @intCast(index);
+                };
+            };
             if (input.array.items.len > 8192) return error.Capacity;
-            return .{ .history = history, .input = input, .core_tools = core, .prior_response_id = if (same_epoch) if (previous.?.value.response_id) |id| try a.dupe(u8, id.bytes) else null else null, .prior_request = if (previous) |saved| saved.value.source_request else null };
+            return .{ .history = history, .origins = origins, .reasoning_skills = reasoning_skills, .input = input, .core_tools = core, .prior_response_id = if (same_profile) if (previous.?.value.response_id) |id| try a.dupe(u8, id.bytes) else null else null, .prior_request = if (previous) |saved| saved.value.source_request else null };
         }
 
         fn markLatest(a: std.mem.Allocator, history: *json.Value, start: usize) !void {

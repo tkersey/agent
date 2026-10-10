@@ -105,7 +105,7 @@ All AR-001–AR-080 identifiers are retained with the amended meanings below.
 | AR-029 | Exact values, Unicode, replay and client mappings checked against independent records and Zig assertions; a JS adaptive counterpart is not required. |
 | AR-030 | Settled call/result groups and explicit lineage transitions; no unresolved-call or replay-null shortcut. |
 | AR-031–033 | Generic authored/projection representation is retained. The consumer rejects in-place effort updates and uses its named new-lineage fallback. Immediate tool-only API-update qualification is not run. |
-| AR-034–036 | Bound visible-fact handoffs retain admitted task facts, evidence, allowances and labeled hypotheses; oversized handoffs reject and opaque cross-model compatibility is not assumed. |
+| AR-034–036 | Transcript continuation retains admitted task facts and settled exchanges while excluding incompatible opaque material. Explicit replacement contexts are retired. |
 | AR-037–038 | Input-text marker locations, retained boundaries, at most two new writes, no transient suffix markers and explicit cache/diagnostic fields. Live API acceptance is not run. |
 | AR-039–040 | Labeled local byte-prefix measurements, zero prewarm/compaction calls and no automatic model substitution or ambiguous retry. |
 | AR-041–042 | State/preparation/allocation/storage observations, existing reservations and namespace ceilings, original-reference binding and missing-reference rejection. Maximal input combinations are not promised to fit. |
@@ -132,8 +132,8 @@ All AR-001–AR-080 identifiers are retained with the amended meanings below.
 | --- | --- |
 | Adaptive program implemented | Reusable authored controls/contracts/responder plus the deciding consumer and emitted BPI3; source and authored/native tests. |
 | Native reference integration qualified | Exact-head retained Linux checks, real controlled I/O/recovery/archives and current review convergence. |
-| Live features qualified | Not run; requires separate current model, data and spend authorization. |
-| Cache measured | Provider cache reuse not measured. Local bytes, marker placement and controlled fixture measurements are reported separately. |
+| Live features qualified | Original merged subject: unqualified. Later authorized campaign: see the exact repaired subject and feature dispositions in the live report. |
+| Cache measured | Later live campaign reports actual cached-input usage separately for Sol/medium, Sol/high and Astra/medium; controlled fixture and local-prefix measurements remain separate evidence. |
 | Single-binary distribution | New distribution work is deferred. The existing embedded reference executable is available and exercised; no new package, shell or release is required. |
 
 The observation report separates byte counts, optional usage, local prefix

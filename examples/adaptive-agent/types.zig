@@ -41,7 +41,7 @@ pub const P = model.Profile(Action, .{
     .{ .name = "inference_set", .description = "Select an approved profile and effort for the next inference, using the current control revision." },
     .{ .name = "skill_set", .description = "Load, deactivate or physically unload a pinned approved skill. Use an exact version and current control revision." },
     .{ .name = "inspect", .description = "Locate guard-like lines in acquired evidence. This lexical aid requires an active invariant-review skill; it is not a correctness proof." },
-}, .{ .model_id_bytes = 128, .temperature_bytes = 32, .maximum_messages = 4, .message_bytes = 8192, .maximum_output_items = 8, .call_id_bytes = 128, .arguments_json_bytes = 16384, .result_text_bytes = 32768, .provider_response_bytes = 512 * 1024, .maximum_adaptive_reply_bytes = 16 * 1024 });
+}, .{ .model_id_bytes = 128, .temperature_bytes = 32, .maximum_messages = 4, .message_bytes = model.maximum_adaptive_request_bytes, .maximum_output_items = 8, .call_id_bytes = 128, .arguments_json_bytes = 16384, .result_text_bytes = 32768, .provider_response_bytes = 512 * 1024, .maximum_adaptive_reply_bytes = 16 * 1024 });
 pub const PolicyView = struct { profiles: controls.Profiles, catalog: controls.Catalog, maximum_model_calls: u16, maximum_revision: u64 };
 pub const Bindings = struct {
     policy: [32]u8,
@@ -75,8 +75,6 @@ pub const WorkOutcome = union(enum) {
     ask: struct { question: Question, answer: Answer },
     inspect: struct { evidence_index: u64, guard_count: u32 },
 };
-pub const Outcome = union(enum) { artifact: model.ArtifactReference, answer: @FieldType(WorkOutcome, "ask") };
-pub const Outcomes = contracts.Vector(Outcome, 12);
 pub const WorkRequest = struct {
     context: model.AdaptiveContextReference,
     call_id: P.CallId,
@@ -109,15 +107,12 @@ pub const ReceiptArtifact = struct { receipt: ControlReceipt, model_text: P.Resu
 pub const Receipts = contracts.Vector(ReceiptReference, 16);
 pub const State = struct {
     task: Summary,
-    pending_model_intent: contracts.Text(256),
     followups: Followups,
     control: controls.State,
     replay: ?model.AdaptiveContextReference,
-    handoff: ?model.ArtifactReference,
     results: PendingResults,
     messages: P.Messages,
     evidence: EvidenceList,
-    outcomes: Outcomes,
     receipts: Receipts,
     model_calls: u16,
     work_calls: u16,
@@ -147,24 +142,9 @@ pub const Ready = struct {
     results: PendingResults,
 };
 pub const PreparationResult = union(enum) { ready: Ready, rejected: controls.Rejection };
-pub const PreparationProduct = struct { result: PreparationResult, objects: contracts.Vector(contracts.Bytes(128 * 1024), 2) };
+pub const PreparationProduct = struct { result: PreparationResult, receipt: ?contracts.Bytes(128 * 1024) };
 pub const SkillConfig = struct { id: contracts.Text(64), version: contracts.Text(64), description: contracts.Text(256), markdown: contracts.Text(4096), tools: [P.declaration_count]bool };
 pub const Configuration = struct { workspace: contracts.Text(128), snapshot_root: contracts.Text(4096), endpoint: contracts.Text(2048), audience: contracts.Text(128), profiles: @FieldType(P.AdaptivePolicy, "profiles"), initial_profile: contracts.Text(64), initial_effort: @FieldType(model.AdaptiveSelection, "effective_effort"), skills: contracts.Vector(SkillConfig, 14), maximum_model_calls: u16, maximum_control_revision: u16 };
-pub const Handoff = struct {
-    original_task: Summary,
-    followups: Followups,
-    evidence: contracts.Vector(Evidence, 8),
-    work_outcomes: contracts.Vector(WorkOutcome, 12),
-    prior_controls: Receipts,
-    current_control: ?ControlReceipt,
-    pending_model_hypothesis: contracts.Text(256),
-    control: controls.State,
-    remaining_model_calls: u16,
-    remaining_work_calls: u16,
-    pending_questions: contracts.Vector(Question, 1),
-    completion_criteria: contracts.Text(256),
-};
-
 // Ordinary wire contracts accompany the emitted Boundary image. External
 // inspection tools can decode them without an adaptive execution implementation.
 pub const support_types = .{
@@ -176,7 +156,6 @@ pub const support_types = .{
     .{ .name = "Preparation", .T = Preparation },
     .{ .name = "PreparationResult", .T = PreparationResult },
     .{ .name = "PreparationProduct", .T = PreparationProduct },
-    .{ .name = "Handoff", .T = Handoff },
     .{ .name = "ControlReceipt", .T = ControlReceipt },
     .{ .name = "ControlState", .T = controls.State },
     .{ .name = "Snapshot", .T = contracts.RepositorySnapshot },
@@ -198,7 +177,6 @@ pub const support_types = .{
     .{ .name = "AdaptiveRequest", .T = P.AdaptiveRequest },
     .{ .name = "AdaptiveResult", .T = P.AdaptiveResult },
     .{ .name = "AdaptiveContext", .T = P.AdaptiveContext },
-    .{ .name = "AdaptiveSeed", .T = P.AdaptiveSeed },
     .{ .name = "AdaptivePrepared", .T = P.AdaptivePrepared },
     .{ .name = "Policy", .T = P.AdaptivePolicy },
     .{ .name = "Profile", .T = model.AdaptiveInferenceProfile },

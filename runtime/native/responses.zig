@@ -425,9 +425,20 @@ pub fn replayItem(a: std.mem.Allocator, item: json.Value) !json.Value {
         if (!is(item, "status", "completed") or (try text(item, "call_id")).len == 0 or (try text(item, "name")).len == 0) return error.UnsupportedResponse;
         _ = try text(item, "arguments");
     } else if (is(item, "type", "reasoning")) {
-        try only(item, &.{ "type", "id", "summary", "encrypted_content", "status" });
+        try only(item, &.{ "type", "id", "summary", "content", "encrypted_content", "status" });
         if (json.get(item, "status") != null and !is(item, "status", "completed")) return error.UnsupportedResponse;
         if ((try text(item, "encrypted_content")).len == 0) return error.UnsupportedResponse;
+        // Responses may return optional reasoning content even when it is
+        // empty. Validate its documented shape and retain the original item;
+        // content is private replay material, not a public reasoning summary.
+        if (json.get(item, "content")) |content| if (content != .null) {
+            if (content != .array) return error.UnsupportedResponse;
+            for (content.array.items) |part| {
+                try only(part, &.{ "type", "text" });
+                if (!is(part, "type", "reasoning_text")) return error.UnsupportedResponse;
+                _ = try text(part, "text");
+            }
+        };
         const summary = try field(item, "summary");
         if (summary != .array) return error.UnsupportedResponse;
         for (summary.array.items) |part| {

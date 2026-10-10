@@ -160,8 +160,6 @@ pub fn configure(a: std.mem.Allocator, io: std.Io, options: native.configuration
     if (configuration_digest) |expected| if (!std.mem.eql(u8, expected, try native.json.text(native.json.get(root, "configuration_digest") orelse return error.InvalidConfiguration))) return error.IncompatibleProfile;
     const policy = try Admission.policy(a, profile_bytes);
     if (policy.model_attempts > 16 or policy.control_transitions > 16) return error.InvalidConfiguration;
-    // The immediate tool-only effort-update form is not yet live-qualified.
-    for (policy.profiles.items) |profile| if (profile.effort_update) return error.InvalidConfiguration;
     if (!options.offline) {
         if (options.test_provider) {
             if (!testEndpoint(policy.endpoint.bytes)) return error.InvalidConfiguration;
